@@ -15,10 +15,19 @@ const Login = () => {
     setError('');
     
     try {
-      await login(email, password);
-      navigate('/');
+      const result = await login(email, password);
+      
+      // Navigate based on user role
+      if (result?.role === 'admin') {
+        navigate('/'); // Admin dashboard
+      } else if (result?.role === 'washer') {
+        navigate('/'); // Washer dashboard
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       setError('Invalid email or password');
+      console.error('Login error:', err);
     }
   };
 
@@ -115,35 +124,7 @@ const Login = () => {
         </div>
       </form>
       
-      <div className="mt-6">
-        <div className="relative">
-          <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-gray-300"></div>
-          </div>
-          <div className="relative flex justify-center text-sm">
-            <span className="px-2 bg-white text-gray-500">
-              Demo users
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-6 grid grid-cols-1 gap-3">
-          <div className="rounded-md bg-gray-50 p-3">
-            <div className="text-sm">
-              <p className="font-medium text-gray-800">Admin User:</p>
-              <p className="text-gray-500">Email: admin@zucicrm.com</p>
-              <p className="text-gray-500">Password: admin123</p>
-            </div>
-          </div>
-          <div className="rounded-md bg-gray-50 p-3">
-            <div className="text-sm">
-              <p className="font-medium text-gray-800">Washer User:</p>
-              <p className="text-gray-500">Email: washer@zucicrm.com</p>
-              <p className="text-gray-500">Password: washer123</p>
-            </div>
-          </div>
-        </div>
-      </div>
+     
     </div>
   );
 };

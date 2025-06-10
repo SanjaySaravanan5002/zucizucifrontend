@@ -1,17 +1,13 @@
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import { loginUser, getCurrentUser, User as AuthUser } from '../services/authService';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'washer';
-}
+type User = AuthUser;
 
 interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User | undefined>;
   logout: () => void;
 }
 
@@ -40,16 +36,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         const token = localStorage.getItem('auth_token');
         
         if (token) {
-          // This would be a real API call in production
-          // For demo, we'll mock a successful auth with sample data
-          setUser({
-            id: '1',
-            name: 'Admin User',
-            email: 'admin@zucicrm.com',
-            role: 'admin'
-          });
+          // Get current user from API
+          const userData = await getCurrentUser();
+          setUser(userData);
         }
       } catch (error) {
+        console.error('Authentication check failed:', error);
         localStorage.removeItem('auth_token');
       } finally {
         setIsLoading(false);
@@ -59,23 +51,27 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     checkAuth();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<User | undefined> => {
     setIsLoading(true);
     
-    // This would be a real API call in production
-    // For demo, we'll mock a successful login
-    await new Promise(resolve => setTimeout(resolve, 800));
-    
-    const mockUser = {
-      id: '1',
-      name: 'Admin User',
-      email,
-      role: 'admin' as const
-    };
-    
-    setUser(mockUser);
-    localStorage.setItem('auth_token', 'mock_jwt_token');
-    setIsLoading(false);
+    try {
+      // Call the login API
+      const response = await loginUser(email, password);
+      
+      // Set user and token
+      setUser(response.user);
+      localStorage.setItem('auth_token', response.token);
+      
+      // Return the user object so the login component can use it for navigation
+      return response.user;
+    } catch (error) {
+      // Clear any existing auth data
+      localStorage.removeItem('auth_token');
+      setUser(null);
+      throw error; // Re-throw to be caught by the login component
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const logout = () => {

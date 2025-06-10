@@ -1,69 +1,18 @@
-import React from 'react';
-import { MapPin, Phone, Calendar } from 'lucide-react';
+import { useState, useEffect, type FC } from 'react';
+import { Loader2, Phone, MapPin, Car, User } from 'lucide-react';
 
-// Mock data
-const recentLeads = [
-  {
-    id: 1,
-    name: 'Arun Kumar',
-    phone: '+91 98765 43210',
-    area: 'Kormangala',
-    carModel: 'Honda City',
-    leadType: 'Monthly',
-    leadSource: 'Referral',
-    assignedWasher: 'Rahul',
-    date: '2023-06-10',
-    status: 'New'
-  },
-  {
-    id: 2,
-    name: 'Priya Sharma',
-    phone: '+91 87654 32109',
-    area: 'Indiranagar',
-    carModel: 'Hyundai Creta',
-    leadType: 'One-time',
-    leadSource: 'Walk-in',
-    assignedWasher: 'Suresh',
-    date: '2023-06-09',
-    status: 'Contacted'
-  },
-  {
-    id: 3,
-    name: 'Vikram Singh',
-    phone: '+91 76543 21098',
-    area: 'HSR Layout',
-    carModel: 'Maruti Swift',
-    leadType: 'Monthly',
-    leadSource: 'WhatsApp',
-    assignedWasher: 'Vikram',
-    date: '2023-06-09',
-    status: 'Converted'
-  },
-  {
-    id: 4,
-    name: 'Meera Patel',
-    phone: '+91 65432 10987',
-    area: 'Whitefield',
-    carModel: 'Toyota Fortuner',
-    leadType: 'One-time',
-    leadSource: 'Pamphlet',
-    assignedWasher: 'Anand',
-    date: '2023-06-08',
-    status: 'Follow-up'
-  },
-  {
-    id: 5,
-    name: 'Rajesh Verma',
-    phone: '+91 54321 09876',
-    area: 'Electronic City',
-    carModel: 'Kia Seltos',
-    leadType: 'Monthly',
-    leadSource: 'Referral',
-    assignedWasher: 'Rajesh',
-    date: '2023-06-08',
-    status: 'New'
-  },
-];
+interface Lead {
+  id: string;
+  customerName: string;
+  phone: string;
+  area: string;
+  leadType: string;
+  leadSource: string;
+  carModel: string;
+  assignedWasher: string | null;
+  date: string;
+  status: string;
+}
 
 const StatusBadge = ({ status }: { status: string }) => {
   const getStatusColors = (status: string) => {
@@ -88,85 +37,138 @@ const StatusBadge = ({ status }: { status: string }) => {
   );
 };
 
-const TypeBadge = ({ type }: { type: string }) => {
-  const isMonthly = type === 'Monthly';
-  
-  return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-      isMonthly ? 'bg-teal-100 text-teal-800' : 'bg-orange-100 text-orange-800'
-    }`}>
-      {type}
-    </span>
-  );
-};
+const RecentLeadsList: FC = () => {
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-const RecentLeadsList = () => {
+  useEffect(() => {
+    const fetchLeads = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/dashboard/recent-leads');
+        const data = await response.json();
+        setLeads(data);
+        setError(null);
+      } catch (error) {
+        console.error('Error fetching recent leads:', error);
+        setError('Failed to load recent leads');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLeads();
+  }, []);
+
+  const getStatusColor = (status: string): string => {
+    switch (status.toLowerCase()) {
+      case 'new':
+        return 'bg-blue-50 text-blue-700 border-blue-100';
+      case 'assigned':
+        return 'bg-yellow-50 text-yellow-700 border-yellow-100';
+      case 'completed':
+        return 'bg-green-50 text-green-700 border-green-100';
+      case 'cancelled':
+        return 'bg-red-50 text-red-700 border-red-100';
+      default:
+        return 'bg-gray-50 text-gray-700 border-gray-100';
+    }
+  };
+
+  const getLeadTypeColor = (type: string): string => {
+    return type.toLowerCase() === 'monthly' 
+      ? 'bg-purple-50 text-purple-700 border-purple-100'
+      : 'bg-indigo-50 text-indigo-700 border-indigo-100';
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-red-500 font-medium">{error}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 text-sm text-red-600 hover:text-red-500"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="overflow-hidden">
+    <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Customer
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Type
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Source
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Car Model
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Assigned To
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Date
-            </th>
-            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Status
-            </th>
+        <thead>
+          <tr className="text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <th scope="col" className="px-6 py-4">Customer</th>
+            <th scope="col" className="px-6 py-4">Details</th>
+            <th scope="col" className="px-6 py-4">Type</th>
+            <th scope="col" className="px-6 py-4">Assigned To</th>
+            <th scope="col" className="px-6 py-4">Status</th>
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {recentLeads.map((lead) => (
-            <tr key={lead.id} className="hover:bg-gray-50">
+          {leads.map((lead) => (
+            <tr key={lead.id} className="hover:bg-gray-50 transition-colors">
               <td className="px-6 py-4 whitespace-nowrap">
                 <div className="flex items-center">
-                  <div>
-                    <div className="text-sm font-medium text-gray-900">{lead.name}</div>
-                    <div className="text-sm text-gray-500 flex items-center mt-1">
-                      <Phone className="h-3 w-3 text-gray-400 mr-1" />
-                      {lead.phone}
-                    </div>
-                    <div className="text-sm text-gray-500 flex items-center mt-1">
-                      <MapPin className="h-3 w-3 text-gray-400 mr-1" />
-                      {lead.area}
-                    </div>
+                  <div className="flex-shrink-0 h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center">
+                    <span className="text-lg font-medium text-gray-600">
+                      {lead.customerName.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="ml-4">
+                    <div className="text-sm font-medium text-gray-900">{lead.customerName}</div>
+                    <div className="text-sm text-gray-500">{new Date(lead.date).toLocaleDateString()}</div>
                   </div>
                 </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <TypeBadge type={lead.leadType} />
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {lead.leadSource}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {lead.carModel}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {lead.assignedWasher}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                <div className="flex items-center">
-                  <Calendar className="h-3 w-3 text-gray-400 mr-1" />
-                  {new Date(lead.date).toLocaleDateString()}
+                <div className="flex flex-col space-y-1">
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Phone className="h-4 w-4 mr-1" />
+                    {lead.phone}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <MapPin className="h-4 w-4 mr-1" />
+                    {lead.area}
+                  </div>
+                  <div className="flex items-center text-sm text-gray-500">
+                    <Car className="h-4 w-4 mr-1" />
+                    {lead.carModel}
+                  </div>
                 </div>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <StatusBadge status={lead.status} />
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getLeadTypeColor(lead.leadType)}`}>
+                  {lead.leadType}
+                </span>
+                <div className="text-xs text-gray-500 mt-1">
+                  via {lead.leadSource}
+                </div>
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                {lead.assignedWasher ? (
+                  <div className="flex items-center">
+                    <User className="h-4 w-4 text-gray-400 mr-1" />
+                    <span className="text-sm text-gray-900">{lead.assignedWasher}</span>
+                  </div>
+                ) : (
+                  <span className="text-sm text-gray-500">Not assigned</span>
+                )}
+              </td>
+              <td className="px-6 py-4 whitespace-nowrap">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStatusColor(lead.status)}`}>
+                  {lead.status}
+                </span>
               </td>
             </tr>
           ))}

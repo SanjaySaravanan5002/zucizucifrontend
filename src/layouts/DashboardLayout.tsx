@@ -27,6 +27,7 @@ const DashboardLayout = () => {
     { name: 'Leads', href: '/leads', icon: ClipboardList },
     { name: 'Customers', href: '/customers', icon: Users },
     { name: 'Washer Panel', href: '/washer', icon: Car },
+    { name: 'Revenue', href: '/revenue', icon: BarChart3 },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
   ];
   

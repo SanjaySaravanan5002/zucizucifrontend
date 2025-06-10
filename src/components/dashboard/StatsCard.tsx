@@ -1,64 +1,74 @@
 import React from 'react';
-import { DivideIcon as LucideIcon } from 'lucide-react';
-import { twMerge } from 'tailwind-merge';
+import { ArrowUpRight, ArrowDownRight, LucideIcon } from 'lucide-react';
 
 interface StatsCardProps {
   title: string;
   value: string;
-  change: string;
-  increasing: boolean;
+  change?: string;
+  increasing?: boolean;
   icon: LucideIcon;
+  description: string;
+  subtitle?: string;
 }
 
-const StatsCard: React.FC<StatsCardProps> = ({ 
+const StatsCard = ({ 
   title, 
   value, 
   change, 
   increasing, 
-  icon: Icon 
-}) => {
+  icon: Icon, 
+  description,
+  subtitle 
+}: StatsCardProps) => {
+  const getIconColorClass = () => {
+    if (title.toLowerCase().includes('customer')) return 'text-purple-600 bg-purple-50';
+    if (title.toLowerCase().includes('revenue') || title.toLowerCase().includes('income')) return 'text-green-600 bg-green-50';
+    if (title.toLowerCase().includes('lead')) return 'text-blue-600 bg-blue-50';
+    if (title.toLowerCase().includes('conversion')) return 'text-orange-600 bg-orange-50';
+    return 'text-gray-600 bg-gray-50';
+  };
+
+  const getTrendColor = () => {
+    if (!change) return '';
+    const isPositive = increasing;
+    const isNeutral = change === '0%';
+    
+    if (isNeutral) return 'text-gray-600 bg-gray-50';
+    return isPositive ? 'text-green-600 bg-green-50' : 'text-red-600 bg-red-50';
+  };
+
   return (
-    <div className="bg-white overflow-hidden rounded-lg shadow transition-all duration-200 hover:shadow-md border border-gray-100">
-      <div className="p-5">
-        <div className="flex items-center">
-          <div className="flex-shrink-0 bg-primary-light/10 rounded-md p-3">
-            <Icon className="h-6 w-6 text-primary" />
+    <div className="bg-white overflow-hidden rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-all duration-200">
+      <div className="p-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <div className={`p-3 rounded-lg ${getIconColorClass()}`}>
+                <Icon className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="ml-5">
+              <h3 className="text-sm font-medium text-gray-500">{title}</h3>
+              <div className="mt-1 flex items-baseline">
+                <p className="text-2xl font-semibold text-gray-900">{value}</p>
+                {subtitle && (
+                  <p className="ml-2 text-sm text-gray-500">{subtitle}</p>
+                )}
+              </div>
+            </div>
           </div>
-          <div className="ml-5 w-0 flex-1">
-            <dl>
-              <dt className="text-sm font-medium text-gray-500 truncate">{title}</dt>
-              <dd>
-                <div className="text-xl font-semibold text-gray-900">{value}</div>
-              </dd>
-            </dl>
-          </div>
+          {change && (
+            <div className={`flex items-center px-3 py-1 rounded-full text-sm font-medium ${getTrendColor()}`}>
+              {increasing ? (
+                <ArrowUpRight className="h-5 w-5 mr-1" />
+              ) : (
+                <ArrowDownRight className="h-5 w-5 mr-1" />
+              )}
+              {change}
+            </div>
+          )}
         </div>
-      </div>
-      <div className="bg-gray-50 px-5 py-3">
-        <div className="text-sm">
-          <span 
-            className={twMerge(
-              "inline-flex items-center mr-2",
-              increasing ? "text-green-600" : "text-red-600"
-            )}
-          >
-            {change}
-            <svg 
-              className={`ml-1 h-5 w-5 ${increasing ? "text-green-500" : "text-red-500"}`} 
-              fill="none" 
-              stroke="currentColor" 
-              viewBox="0 0 24 24"
-            >
-              <path 
-                strokeLinecap="round" 
-                strokeLinejoin="round" 
-                strokeWidth={2} 
-                d={increasing ? "M5 10l7-7m0 0l7 7m-7-7v18" : "M19 14l-7 7m0 0l-7-7m7 7V3"} 
-              />
-            </svg>
-          </span>
-          <span className="text-gray-500">from last month</span>
-        </div>
+        <p className="mt-4 text-sm text-gray-500 border-t border-gray-100 pt-4">{description}</p>
       </div>
     </div>
   );

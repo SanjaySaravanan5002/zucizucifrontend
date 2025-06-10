@@ -5,12 +5,15 @@ import { Toaster } from 'react-hot-toast';
 // Layouts
 import DashboardLayout from './layouts/DashboardLayout';
 import AuthLayout from './layouts/AuthLayout';
+import LeadDetails from './pages/LeadDetails';
+import Revenue from './pages/Revenue';
 
 // Pages
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import Customers from './pages/Customers';
-import WasherPanel from './pages/WasherPanel';
+import WasherPanel from "./pages/WasherPanel";
+import WasherDetails from "./pages/WasherDetails";
 import Reports from './pages/Reports';
 import Login from './pages/Login';
 import NotFound from './pages/NotFound';
@@ -32,7 +35,10 @@ function App() {
             <Route index element={<Dashboard />} />
             <Route path="leads" element={<Leads />} />
             <Route path="customers" element={<Customers />} />
-            <Route path="washer" element={<WasherPanel />} />
+            <Route path="/washer" element={<WasherPanel />} />
+            <Route path="/washer/:id/details" element={<WasherDetails />} />
+            <Route path="user/:id" element={<LeadDetails />} />
+            <Route path="revenue" element={<Revenue />} />
             <Route path="reports" element={<Reports />} />
           </Route>
           

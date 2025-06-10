@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+.map {
+  width: 100%;
+  height: 100%;
+}
+
+.ol-control {
+  background-color: rgba(255,255,255,0.4);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.ol-zoom {
+  top: .5em;
+  left: .5em;
+}
+
+.ol-attribution {
+  background: rgba(255,255,255,0.8);
+}
+
 :root {
   --primary: #3B82F6;
   --primary-dark: #2563EB;
