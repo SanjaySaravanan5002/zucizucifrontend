@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, Plus, User } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE_URL = process.env.NODE_ENV === 'production' ? 'https://localhost:5000/api' : 'https://zuci-backend-my3h.onrender.com/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-backend-my3h.onrender.com/api';
 
 interface Customer {
   _id: string;
