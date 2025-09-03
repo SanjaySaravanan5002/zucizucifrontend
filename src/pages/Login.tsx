@@ -21,7 +21,7 @@ const Login = () => {
       if (result?.role === 'admin') {
         navigate('/'); // Admin dashboard
       } else if (result?.role === 'washer') {
-        navigate('/'); // Washer dashboard
+        navigate('/washer-dashboard'); // Washer dashboard
       } else {
         navigate('/');
       }
@@ -60,7 +60,7 @@ const Login = () => {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+              className="block w-full pl-10 pr-3 py-2 border border-white/30 rounded-lg bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm transition-all duration-200"
               placeholder="admin@zucicrm.com"
             />
           </div>
@@ -82,7 +82,7 @@ const Login = () => {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+              className="block w-full pl-10 pr-3 py-2 border border-white/30 rounded-lg bg-white/50 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm transition-all duration-200"
               placeholder="Enter your password"
             />
           </div>
@@ -112,7 +112,7 @@ const Login = () => {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-primary btn-liquid w-full flex justify-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">

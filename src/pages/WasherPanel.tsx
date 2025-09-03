@@ -45,9 +45,9 @@ const WasherPanel = () => {
     password: ''
   });
 
-  const API_BASE_URL = 'http://localhost:5000/api';
+  const API_BASE_URL = 'https://zuci-backend-my3h.onrender.com/api';
 
-  // Fetch washers list
+  // Fetch washers list (all washers for management)
   useEffect(() => {
     const fetchWashers = async () => {
       try {
@@ -65,15 +65,9 @@ const WasherPanel = () => {
     fetchWashers();
   }, []);
 
-  const handleViewDetails = async (washerId: string) => {
-    try {
-      await axios.get(`${API_BASE_URL}/washer/${washerId}/wash-details`);
-      toast.success('Washer details loaded successfully');
-      // Navigate to details page
-      navigate(`/washer/${washerId}/details`);
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to load washer details');
-    }
+  const handleViewDetails = (washerId: string) => {
+    // Navigate directly to details page - the WasherDetails component will handle data fetching
+    navigate(`/washer/${washerId}/details`);
   };
 
   const handleRefresh = async () => {
@@ -94,7 +88,7 @@ const WasherPanel = () => {
       const newStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
       await axios.post(`${API_BASE_URL}/washer/${washerId}/status`, { status: newStatus });
       
-      // Fetch updated list of washers
+      // Fetch updated list of washers (all washers for management)
       const response = await axios.get(`${API_BASE_URL}/washer/list`);
       setWashers(response.data);
       

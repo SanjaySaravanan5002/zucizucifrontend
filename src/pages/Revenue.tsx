@@ -1,9 +1,13 @@
 import { useState, useEffect, useMemo } from 'react';
-import axios from 'axios';
+import api from '../services/apiService';
 import { BarChart2, Download, Filter, ListFilter, RefreshCcw, Search, CreditCard, DollarSign, Calendar, Users, Droplets, ArrowUp, ArrowDown, CheckCircle, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { Navigate } from 'react-router-dom';
 
 interface RevenueStats {
   totalRevenue: number;
+  netRevenue: number;
+  totalExpenses: number;
   totalWashes: number;
   totalCustomers: number;
   revenueByWashType: Record<string, number>;
@@ -16,6 +20,7 @@ interface RevenueStats {
     paid: number;
     unpaid: number;
   };
+  expenses: any[];
 }
 
 type SortField = 'customerName' | 'area' | 'washType' | 'washerName' | 'date' | 'amount' | 'isPaid';
@@ -43,7 +48,13 @@ interface Filters {
 }
 
 const Revenue = () => {
+  const { user } = useAuth();
   const [error, setError] = useState<string | null>(null);
+  
+  // Redirect limited admins away from revenue page (admins can access for expense integration)
+  if (user?.role === 'limited_admin') {
+    return <Navigate to="/" replace />;
+  }
   // Initialize date filters with current month
   const today = new Date();
   const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
@@ -113,7 +124,7 @@ const Revenue = () => {
   const totalPages = useMemo(() => Math.ceil(filteredTransactions.length / transactionsPerPage), [filteredTransactions.length, transactionsPerPage]);
 
   useEffect(() => {
-    fetchStats();
+    fetchStatsWithFilters(filters);
   }, []); // Only fetch on component mount
   
   // Add a useEffect to update filters when date inputs change
@@ -124,69 +135,80 @@ const Revenue = () => {
     }
   }, [filters.startDate, filters.endDate]);
 
-  const fetchStats = async () => {
+  const fetchStatsWithFilters = async (filtersToUse: Filters) => {
     try {
       setLoading(true);
       setCurrentPage(1); // Reset to first page when fetching new data
       
-      // Ensure dates are properly formatted for the API
-      const startDate = filters.startDate ? new Date(filters.startDate) : null;
-      const endDate = filters.endDate ? new Date(filters.endDate) : null;
-      
-      // Add one day to endDate to include the full day in the filter
-      if (endDate) {
-        endDate.setDate(endDate.getDate() + 1);
-        endDate.setMilliseconds(endDate.getMilliseconds() - 1); // Set to 23:59:59.999
-      }
-      
       // Create params object with only non-empty values
       const params: Record<string, string> = {};
       
-      // Add date parameters if they exist
-      if (startDate) params.startDate = startDate.toISOString();
-      if (endDate) params.endDate = endDate.toISOString();
+      // Add date parameters if they exist (keep original format)
+      if (filtersToUse.startDate) params.startDate = filtersToUse.startDate;
+      if (filtersToUse.endDate) params.endDate = filtersToUse.endDate;
       
       // Add other filter parameters only if they have values
-      if (filters.washType) params.washType = filters.washType;
-      if (filters.area) params.area = filters.area;
-      if (filters.customerType) params.customerType = filters.customerType;
+      if (filtersToUse.washType) params.washType = filtersToUse.washType;
+      if (filtersToUse.area) params.area = filtersToUse.area;
+      if (filtersToUse.customerType) params.customerType = filtersToUse.customerType;
 
       console.log('Fetching with params:', params);
-      const response = await axios.get('http://localhost:5000/api/reports/revenue_and_income', { params });
+      const token = localStorage.getItem('auth_token');
+      
+      const response = await api.get('/reports/revenue_and_income', { 
+        params,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('Revenue API Response:', response.data);
       setStats(response.data);
       setError(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching revenue stats:', error);
-      setError('Failed to fetch revenue data. Please try again.');
+      
+      if (error.response?.status === 401) {
+        setError('Authentication failed. Please login again.');
+      } else if (error.response?.status === 403) {
+        setError('Access denied. Insufficient permissions.');
+      } else if (error.response?.data?.message) {
+        setError(error.response.data.message);
+      } else {
+        setError('Failed to fetch revenue data. Please check your connection and try again.');
+      }
       setStats(null);
     } finally {
       setLoading(false);
     }
   };
 
+
+
   const handleFilterChange = (key: keyof Filters, value: string) => {
-    setFilters(prev => {
-      const newFilters = { ...prev, [key]: value };
-      // Validate dates if both are present
-      if (key === 'startDate' || key === 'endDate') {
-        if (newFilters.startDate && newFilters.endDate) {
-          const start = new Date(newFilters.startDate);
-          const end = new Date(newFilters.endDate);
-          if (start > end) {
-            setError('Start date cannot be after end date');
-            return newFilters; // Return without fetching
-          }
+    const newFilters = { ...filters, [key]: value };
+    
+    // Validate dates if both are present
+    if (key === 'startDate' || key === 'endDate') {
+      if (newFilters.startDate && newFilters.endDate) {
+        const start = new Date(newFilters.startDate);
+        const end = new Date(newFilters.endDate);
+        if (start > end) {
+          setError('Start date cannot be after end date');
+          return;
         }
       }
-      
-      // Clear any previous errors
-      if (error) setError(null);
-      
-      // Schedule API call after state update
-      setTimeout(() => fetchStats(), 0);
-      
-      return newFilters;
-    });
+    }
+    
+    // Clear any previous errors
+    if (error) setError(null);
+    
+    // Update filters and fetch immediately
+    setFilters(newFilters);
+    
+    // Call fetchStats with new filters directly
+    fetchStatsWithFilters(newFilters);
   };
   
   // Date format conversion helper - removing unused function to fix lint warning
@@ -294,7 +316,14 @@ const Revenue = () => {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Income & Revenue</h1>
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">Income & Revenue</h1>
+          {user?.role === 'admin' && (
+            <p className="text-sm text-gray-600 mt-1">
+              Revenue calculations include expenses managed in Expenses tab
+            </p>
+          )}
+        </div>
         <div className="flex space-x-4">
           <div className="flex bg-gray-100 rounded-md p-1 mr-4">
             <button
@@ -410,47 +439,28 @@ const Revenue = () => {
         
         {/* Action Buttons */}
         <div className="mt-6 pt-4 border-t border-gray-200 flex justify-end">
-          <div className="flex space-x-4">
-            <button
-              onClick={() => {
-                // Reset filters to default values
-                setFilters({
-                  startDate: firstDayOfMonth,
-                  endDate: lastDayOfMonth,
-                  washType: '',
-                  area: '',
-                  customerType: ''
-                });
-                // Clear any errors
-                setError(null);
-                // Fetch with reset filters
-                setTimeout(() => fetchStats(), 0);
-              }}
-              className="flex items-center space-x-2 px-4 py-2 bg-gray-50 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
-              disabled={loading}
-            >
-              <RefreshCcw className="h-4 w-4" />
-              <span>Reset Filters</span>
-            </button>
-            
-            <button
-              onClick={() => fetchStats()}
-              className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <RefreshCcw className="h-4 w-4 animate-spin" />
-                  <span>Loading...</span>
-                </>
-              ) : (
-                <>
-                  <RefreshCcw className="h-4 w-4" />
-                  <span>Refresh Data</span>
-                </>
-              )}
-            </button>
-          </div>
+          <button
+            onClick={() => {
+              // Reset filters to default values
+              const resetFilters = {
+                startDate: firstDayOfMonth,
+                endDate: lastDayOfMonth,
+                washType: '',
+                area: '',
+                customerType: ''
+              };
+              setFilters(resetFilters);
+              // Clear any errors
+              setError(null);
+              // Fetch with reset filters
+              fetchStatsWithFilters(resetFilters);
+            }}
+            className="flex items-center space-x-2 px-4 py-2 bg-gray-50 text-gray-700 border border-gray-300 rounded-md hover:bg-gray-100 transition-colors"
+            disabled={loading}
+          >
+            <RefreshCcw className="h-4 w-4" />
+            <span>Reset Filters</span>
+          </button>
         </div>
       </div>
 
@@ -463,13 +473,13 @@ const Revenue = () => {
 
       {/* Stats Overview */}
       {stats && view === 'summary' && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl shadow-sm border border-blue-200">
             <div className="flex items-center mb-3">
               <div className="p-2 bg-blue-500 rounded-lg mr-3">
                 <DollarSign className="h-5 w-5 text-white" />
               </div>
-              <h3 className="text-sm font-medium text-blue-800">Total Revenue</h3>
+              <h3 className="text-sm font-medium text-blue-800">Gross Revenue</h3>
             </div>
             <p className="text-3xl font-bold text-blue-900">
               {formatCurrency(stats.totalRevenue)}
@@ -482,12 +492,44 @@ const Revenue = () => {
             </div>
           </div>
 
+          <div className={`bg-gradient-to-br p-6 rounded-xl shadow-sm border ${
+            stats.netRevenue >= 0 
+              ? 'from-green-50 to-green-100 border-green-200' 
+              : 'from-red-50 to-red-100 border-red-200'
+          }`}>
+            <div className="flex items-center mb-3">
+              <div className={`p-2 rounded-lg mr-3 ${
+                stats.netRevenue >= 0 ? 'bg-green-500' : 'bg-red-500'
+              }`}>
+                <DollarSign className="h-5 w-5 text-white" />
+              </div>
+              <h3 className={`text-sm font-medium ${
+                stats.netRevenue >= 0 ? 'text-green-800' : 'text-red-800'
+              }`}>Net Revenue</h3>
+            </div>
+            <p className={`text-3xl font-bold ${
+              stats.netRevenue >= 0 ? 'text-green-900' : 'text-red-900'
+            }`}>
+              {formatCurrency(stats.netRevenue)}
+            </p>
+            <div className="flex items-center mt-3">
+              <DollarSign className={`h-4 w-4 mr-1 ${
+                stats.netRevenue >= 0 ? 'text-green-600' : 'text-red-600'
+              }`} />
+              <p className={`text-sm ${
+                stats.netRevenue >= 0 ? 'text-green-700' : 'text-red-700'
+              }`}>
+                After expenses: {formatCurrency(stats.totalExpenses || 0)}
+              </p>
+            </div>
+          </div>
+
           <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-xl shadow-sm border border-purple-200">
             <div className="flex items-center mb-3">
               <div className="p-2 bg-purple-500 rounded-lg mr-3">
                 <Users className="h-5 w-5 text-white" />
               </div>
-              <h3 className="text-sm font-medium text-purple-800">Average Revenue/Customer</h3>
+              <h3 className="text-sm font-medium text-purple-800">Avg Revenue/Customer</h3>
             </div>
             <p className="text-3xl font-bold text-purple-900">
               {formatCurrency(stats.totalCustomers ? stats.totalRevenue / stats.totalCustomers : 0)}

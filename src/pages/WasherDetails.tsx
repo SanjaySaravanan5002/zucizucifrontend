@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Calendar, Clock, IndianRupee, Mail, Phone, Star, Edit, Save, X, LogIn, LogOut } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
+import { useRoleAccess } from '../hooks/useRoleAccess';
+import { apiService } from '../services/apiService';
 
 interface WashHistory {
   id: string;
@@ -57,13 +59,13 @@ interface WasherDetails {
 const WasherDetails = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { hasAdminAccess, user } = useRoleAccess();
   const [washer, setWasher] = useState<WasherDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [personalDetails, setPersonalDetails] = useState({
     address: '',
     dateOfBirth: '',
-    aadharNumber: '',
     email: '',
     phone: '',
     password: '',
@@ -73,28 +75,39 @@ const WasherDetails = () => {
   const [attendance, setAttendance] = useState<{ attendance: AttendanceRecord[], stats: any } | null>(null);
   const [isMarkingAttendance, setIsMarkingAttendance] = useState(false);
 
-  const API_BASE_URL = 'http://localhost:5000/api';
+  const API_BASE_URL = 'https://zuci-backend-my3h.onrender.com/api';
 
   const fetchAttendance = async () => {
+    if (!id) return;
+    
     try {
-      const response = await axios.get(`${API_BASE_URL}/washer/${id}/attendance`);
-      setAttendance(response.data);
+      const result = await apiService.get(`/washer/${id}/attendance`);
+      if (result.success) {
+        setAttendance(result.data);
+      } else {
+        console.error('Failed to load attendance:', result.error);
+      }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || 'Failed to load attendance');
+      console.error('Failed to load attendance:', err);
     }
   };
 
   const markAttendance = async (type: 'in' | 'out') => {
     try {
       setIsMarkingAttendance(true);
-      await axios.post(`${API_BASE_URL}/washer/attendance`, {
+      const result = await apiService.post('/washer/attendance', {
         washerId: id,
         type
       });
-      toast.success(`Time-${type} marked successfully`);
-      fetchAttendance(); // Refresh attendance data
+      
+      if (result.success) {
+        toast.success(`Time-${type} marked successfully`);
+        fetchAttendance(); // Refresh attendance data
+      } else {
+        toast.error(result.error || `Failed to mark time-${type}`);
+      }
     } catch (err: any) {
-      toast.error(err.response?.data?.message || `Failed to mark time-${type}`);
+      toast.error(`Failed to mark time-${type}`);
     } finally {
       setIsMarkingAttendance(false);
     }
@@ -105,7 +118,6 @@ const WasherDetails = () => {
       setPersonalDetails({
         address: washer.address || '',
         dateOfBirth: washer.dateOfBirth ? new Date(washer.dateOfBirth).toISOString().split('T')[0] : '',
-        aadharNumber: washer.aadharNumber || '',
         email: washer.email || '',
         phone: washer.phone || '',
         password: '',
@@ -114,22 +126,56 @@ const WasherDetails = () => {
   }, [washer]);
 
   useEffect(() => {
+    let isMounted = true;
+    
     const fetchWasherDetails = async () => {
       try {
         setLoading(true);
-        const response = await axios.get(`${API_BASE_URL}/washer/${id}/wash-details`);
-        setWasher(response.data);
+        
+        // Check permissions
+        if (!hasAdminAccess()) {
+          toast.error('Access denied. Admin privileges required.');
+          navigate('/dashboard');
+          return;
+        }
+        
+        const result = await apiService.get(`/washer/${id}/wash-details`);
+        
+        if (!isMounted) return; // Prevent state update if component unmounted
+        
+        if (result.success) {
+          setWasher(result.data);
+        } else {
+          if (result.status === 403) {
+            toast.error('Access denied. Insufficient permissions.');
+          } else if (result.status === 401) {
+            toast.error('Authentication required. Please login again.');
+          } else {
+            toast.error(result.error || 'Failed to load washer details');
+          }
+          navigate('/washer');
+        }
       } catch (err: any) {
-        toast.error(err.response?.data?.message || 'Failed to load washer details');
-        navigate('/washer');
+        if (isMounted) {
+          toast.error('Failed to load washer details');
+          navigate('/washer');
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchWasherDetails();
-    fetchAttendance();
-  }, [id, navigate]);
+    if (id) {
+      fetchWasherDetails();
+      fetchAttendance();
+    }
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
 
   if (loading) {
     return (
@@ -287,7 +333,6 @@ const WasherDetails = () => {
                     const formData = new FormData();
                     formData.append('address', personalDetails.address);
                     formData.append('dateOfBirth', personalDetails.dateOfBirth);
-                    formData.append('aadharNumber', personalDetails.aadharNumber);
                     formData.append('email', personalDetails.email);
                     formData.append('phone', personalDetails.phone);
                     // Only send password if it's been changed

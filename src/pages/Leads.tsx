@@ -2,10 +2,12 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Filter, Search, Phone, Car, MapPin, 
-  Calendar, User, UserCheck, ArrowUpDown 
+  Calendar, User, UserCheck, ArrowUpDown, Edit 
 } from 'lucide-react';
 import TypeBadge from '../components/common/TypeBadge';
 import StatusBadge from '../components/common/StatusBadge';
+import GPSMapPicker from '../components/GPSMapPicker';
+import { useToast } from '../contexts/ToastContext';
 
 import axios from 'axios';
 
@@ -23,37 +25,55 @@ interface Lead {
   notes: string;
 }
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://zuci-backend-my3h.onrender.com/api';
 
-// API functions
+// API functions with authentication
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('auth_token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 const api = {
   getLeads: async (filters: any) => {
-    const response = await axios.get(`${API_BASE_URL}/leads`, { params: filters });
+    const response = await axios.get(`${API_BASE_URL}/leads`, { 
+      params: filters,
+      headers: getAuthHeaders()
+    });
     return response.data;
   },
   createLead: async (leadData: any) => {
-    const response = await axios.post(`${API_BASE_URL}/leads`, leadData);
+    const response = await axios.post(`${API_BASE_URL}/leads`, leadData, {
+      headers: getAuthHeaders()
+    });
     return response.data;
   },
   updateLead: async (id: number | string, updates: any) => {
-    const response = await axios.put(`${API_BASE_URL}/leads/${id}`, updates);
+    const response = await axios.put(`${API_BASE_URL}/leads/${id}`, updates, {
+      headers: getAuthHeaders()
+    });
     return response.data;
   },
   deleteLead: async (id: number | string) => {
-    const response = await axios.delete(`${API_BASE_URL}/leads/${id}`);
+    const response = await axios.delete(`${API_BASE_URL}/leads/${id}`, {
+      headers: getAuthHeaders()
+    });
     return response.data;
   },
   getLeadStats: async () => {
-    const response = await axios.get(`${API_BASE_URL}/leads/stats/overview`);
+    const response = await axios.get(`${API_BASE_URL}/leads/stats/overview`, {
+      headers: getAuthHeaders()
+    });
     return response.data;
   }
 };
 
 const Leads = () => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
   const [addLeadOpen, setAddLeadOpen] = useState(false);
+  const [locationTab, setLocationTab] = useState<'current'>('current');
   const [filters, setFilters] = useState({
     leadType: '',
     leadSource: '',
@@ -159,10 +179,11 @@ const Leads = () => {
     phone: '',
     area: '',
     carModel: '',
+    vehicleNumber: '',
     leadType: 'One-time',
     leadSource: '',
     notes: '',
-    coordinates: [0, 0]
+    coordinates: [80.2707, 13.0827] // [lng, lat] format for backend
   });
   
   // Initial state
@@ -176,10 +197,25 @@ const Leads = () => {
     'Pamphlet', 'WhatsApp', 'Referral', 'Walk-in', 'Social Media', 'Website'
   ];
 
-  // Washer options
-  const washerOptions = [
-    'Rahul', 'Suresh', 'Vikram', 'Anand', 'Rajesh'
-  ];
+  // Washer state
+  const [washers, setWashers] = useState<any[]>([]);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [selectedWasher, setSelectedWasher] = useState<string>('');
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [subscriptionData, setSubscriptionData] = useState({
+    packageType: 'Basic',
+    scheduledDates: ['', '', '']
+  });
+  const [showOneTimeModal, setShowOneTimeModal] = useState(false);
+  const [oneTimeData, setOneTimeData] = useState({
+    washType: 'Basic',
+    amount: '',
+    scheduledDate: '',
+    washerId: ''
+  });
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editLead, setEditLead] = useState<Lead | null>(null);
 
   // Fetch leads
   const fetchLeads = useCallback(async () => {
@@ -213,10 +249,23 @@ const Leads = () => {
     }
   }, []);
 
+  // Fetch washers (only active ones for assignment)
+  const fetchWashers = useCallback(async () => {
+    try {
+      const response = await axios.get(`${API_BASE_URL}/washer/list?forAssignment=true`, {
+        headers: getAuthHeaders()
+      });
+      setWashers(response.data);
+    } catch (err) {
+      console.error('Failed to fetch washers:', err);
+    }
+  }, []);
+
   // Load data on mount and when filters change
   useEffect(() => {
     fetchLeads();
-  }, [fetchLeads]);
+    fetchWashers();
+  }, [fetchLeads, fetchWashers]);
 
   useEffect(() => {
     fetchStats();
@@ -244,46 +293,120 @@ const Leads = () => {
     });
   };
   
-  const handleNewLeadChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+  // Geocoding function to get coordinates from area name
+  const getCoordinatesFromArea = async (areaName: string) => {
+    try {
+      // Common Chennai areas with their coordinates
+      const chennaiAreas: { [key: string]: [number, number] } = {
+        'adyar': [80.2574, 13.0067],
+        'anna nagar': [80.2093, 13.0850],
+        'besant nagar': [80.2669, 13.0067],
+        'chrompet': [80.1462, 12.9516],
+        'egmore': [80.2609, 13.0732],
+        'guindy': [80.2206, 13.0067],
+        'kodambakkam': [80.2248, 13.0524],
+        'mylapore': [80.2707, 13.0339],
+        'nungambakkam': [80.2403, 13.0594],
+        'porur': [80.1564, 13.0381],
+        't nagar': [80.2340, 13.0418],
+        'tambaram': [80.1000, 12.9249],
+        'velachery': [80.2206, 12.9759],
+        'anna salai': [80.2707, 13.0827],
+        'omr': [80.2707, 12.8797],
+        'ecr': [80.2707, 12.7797]
+      };
+      
+      const normalizedArea = areaName.toLowerCase().trim();
+      const coordinates = chennaiAreas[normalizedArea];
+      
+      if (coordinates) {
+        return coordinates;
+      }
+      
+      // Default to Chennai center if area not found
+      return [80.2707, 13.0827];
+    } catch (error) {
+      console.error('Geocoding error:', error);
+      return [80.2707, 13.0827]; // Default Chennai coordinates
+    }
+  };
+
+  const handleNewLeadChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setNewLead({
-      ...newLead,
-      [name]: value
-    });
+    
+    if (name === 'area' && value.trim()) {
+      // Auto-geocode when area is entered
+      const coordinates = await getCoordinatesFromArea(value);
+      setNewLead({
+        ...newLead,
+        [name]: value,
+        coordinates: coordinates
+      });
+      
+      // Update map marker if map is loaded
+      if (map && marker && (window as any).ol) {
+        const { transform } = (window as any).ol.proj;
+        const webMercatorCoords = transform(coordinates, 'EPSG:4326', 'EPSG:3857');
+        marker.getGeometry()?.setCoordinates(webMercatorCoords);
+        map.getView().setCenter(webMercatorCoords);
+      }
+    } else {
+      setNewLead({
+        ...newLead,
+        [name]: value
+      });
+    }
   };
   
   const handleAddLead = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!newLead.name || !newLead.phone || !newLead.area || !newLead.carModel || !newLead.leadSource) {
+      showToast('error', 'Please fill in all required fields');
+      return;
+    }
+    
     try {
-      await api.createLead({
+      const leadData = {
         name: newLead.name,
         phone: newLead.phone,
         area: newLead.area,
         carModel: newLead.carModel,
+        vehicleNumber: newLead.vehicleNumber,
         leadType: newLead.leadType,
         leadSource: newLead.leadSource,
         notes: newLead.notes,
         coordinates: newLead.coordinates
-      });
+      };
       
+      console.log('Creating lead with data:', leadData);
+      await api.createLead(leadData);
+      
+      showToast('success', 'Lead created successfully!');
       setAddLeadOpen(false);
+      
       // Reset form
       setNewLead({
         name: '',
         phone: '',
         area: '',
         carModel: '',
+        vehicleNumber: '',
         leadType: 'One-time',
         leadSource: '',
         notes: '',
-        coordinates: [0, 0]
+        coordinates: [80.2707, 13.0827]
       });
       
       // Refresh leads list
       fetchLeads();
       fetchStats();
     } catch (err: any) {
-      setError(err.message || 'Failed to create lead');
+      console.error('Lead creation error:', err);
+      const errorMessage = err.response?.data?.message || err.message || 'Failed to create lead';
+      showToast('error', errorMessage);
+      setError(errorMessage);
     }
   };
   
@@ -327,9 +450,92 @@ const Leads = () => {
       setLoading(false);
     }
   };
+
+  const handleAssignWasher = async () => {
+    if (!selectedLead || !selectedWasher) return;
+    
+    try {
+      await axios.put(`${API_BASE_URL}/leads/${selectedLead.id}/assign`, {
+        washerId: selectedWasher
+      }, {
+        headers: getAuthHeaders()
+      });
+      setShowAssignModal(false);
+      setSelectedLead(null);
+      setSelectedWasher('');
+      fetchLeads();
+    } catch (err: any) {
+      setError(err.message || 'Failed to assign washer');
+    }
+  };
+
+  const handleCreateSubscription = async () => {
+    if (!selectedLead) return;
+    
+    const validDates = subscriptionData.scheduledDates.filter(date => date !== '');
+    const packageDetails = {
+      'Basic': 3,
+      'Premium': 4,
+      'Deluxe': 5
+    };
+    
+    if (validDates.length !== packageDetails[subscriptionData.packageType]) {
+      showToast('warning', `Please select ${packageDetails[subscriptionData.packageType]} dates for ${subscriptionData.packageType} package`);
+      return;
+    }
+
+    try {
+      await axios.post(`${API_BASE_URL}/leads/${selectedLead.id}/monthly-subscription`, {
+        packageType: subscriptionData.packageType,
+        scheduledDates: validDates
+      }, {
+        headers: getAuthHeaders()
+      });
+      
+      setShowSubscriptionModal(false);
+      setSelectedLead(null);
+      setSubscriptionData({
+        packageType: 'Basic',
+        scheduledDates: ['', '', '']
+      });
+      fetchLeads();
+    } catch (err: any) {
+      setError(err.message || 'Failed to create subscription');
+    }
+  };
+
+  const handleAssignOneTimeWash = async () => {
+    if (!selectedLead || !oneTimeData.washType || !oneTimeData.amount || !oneTimeData.scheduledDate || !oneTimeData.washerId) {
+      showToast('warning', 'Please fill all fields');
+      return;
+    }
+
+    try {
+      await axios.put(`${API_BASE_URL}/leads/${selectedLead.id}/assign-onetime`, {
+        washType: oneTimeData.washType,
+        amount: parseFloat(oneTimeData.amount),
+        scheduledDate: oneTimeData.scheduledDate,
+        washerId: oneTimeData.washerId
+      }, {
+        headers: getAuthHeaders()
+      });
+      
+      setShowOneTimeModal(false);
+      setSelectedLead(null);
+      setOneTimeData({
+        washType: 'Basic',
+        amount: '',
+        scheduledDate: '',
+        washerId: ''
+      });
+      fetchLeads();
+    } catch (err: any) {
+      setError(err.message || 'Failed to assign one-time wash');
+    }
+  };
   
   return (
-    <div className="space-y-6 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen p-6">
+    <div className="space-y-6 min-h-screen p-6">
       {/* Stats Overview */}
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 mb-8">
         {/* Total Leads Card */}
@@ -426,7 +632,7 @@ const Leads = () => {
         </div>
       </div>
       {/* Header */}
-      <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg p-6 mb-6 border border-white/50">
+      <div className="glass-card animate-slide-up p-6 mb-6">
         <div className="sm:flex sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-gray-900 flex items-center">
@@ -441,7 +647,7 @@ const Leads = () => {
             <button
               type="button"
               onClick={handleAddLeadToggle}
-              className="inline-flex items-center px-5 py-2.5 border border-transparent rounded-lg shadow-lg text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200 ease-in-out transform hover:scale-105"
+              className="btn-primary btn-liquid animate-pulse-glow"
             >
               <Plus className="-ml-1 mr-2 h-5 w-5" />
               Add New Lead
@@ -451,8 +657,8 @@ const Leads = () => {
       </div>
       
       {/* Search and Filters */}
-      <div className="bg-white/90 backdrop-blur-sm shadow-lg rounded-lg border border-white/50">
-        <div className="p-6 border-b border-gray-200 sm:flex sm:items-center sm:justify-between bg-gray-50">
+      <div className="glass-card floating-card animate-fade-in-up">
+        <div className="p-6 border-b border-white/20 sm:flex sm:items-center sm:justify-between bg-gradient-to-r from-primary/5 to-secondary/5 backdrop-blur-sm rounded-t-xl">
           <div className="relative w-full sm:max-w-md">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
               <Search className="h-5 w-5 text-gray-400" />
@@ -462,14 +668,14 @@ const Leads = () => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name, phone, or area..."
-              className="block w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition duration-150 ease-in-out sm:text-sm shadow-sm"
+              className="block w-full pl-11 pr-4 py-3 border border-white/30 rounded-lg leading-5 bg-white/50 backdrop-blur-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition duration-150 ease-in-out sm:text-sm shadow-sm"
             />
           </div>
           <div className="mt-3 sm:mt-0 sm:ml-4">
             <button
               type="button"
               onClick={handleFilterToggle}
-              className="inline-flex items-center px-4 py-2.5 border border-gray-300 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200 ease-in-out"
+              className="inline-flex items-center px-4 py-2.5 border border-white/30 shadow-sm text-sm font-medium rounded-lg text-gray-700 bg-white/50 backdrop-blur-sm hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary transition-all duration-200 ease-in-out"
             >
               <Filter className="-ml-0.5 mr-2 h-4 w-4" />
               Advanced Filters
@@ -637,12 +843,18 @@ const Leads = () => {
                       value={newLead.area}
                       onChange={handleNewLeadChange}
                       required
+                      placeholder="e.g., T Nagar, Anna Nagar, Adyar"
                       className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
                     />
+                    {newLead.area && (
+                      <div className="mt-1 text-xs text-green-600 flex items-center">
+                        📍 Coordinates auto-populated for {newLead.area}
+                      </div>
+                    )}
                   </div>
                 </div>
                 
-                <div className="sm:col-span-3">
+                <div className="sm:col-span-2">
                   <label htmlFor="carModel" className="block text-sm font-medium text-gray-700">
                     Car Model
                   </label>
@@ -657,6 +869,26 @@ const Leads = () => {
                       value={newLead.carModel}
                       onChange={handleNewLeadChange}
                       required
+                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    />
+                  </div>
+                </div>
+                
+                <div className="sm:col-span-2">
+                  <label htmlFor="vehicleNumber" className="block text-sm font-medium text-gray-700">
+                    Vehicle Number
+                  </label>
+                  <div className="mt-1 relative rounded-md shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <Car className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <input
+                      type="text"
+                      name="vehicleNumber"
+                      id="vehicleNumber"
+                      value={newLead.vehicleNumber}
+                      onChange={handleNewLeadChange}
+                      placeholder="e.g., TN01AB1234"
                       className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
                     />
                   </div>
@@ -695,6 +927,11 @@ const Leads = () => {
                       <option key={source} value={source}>{source}</option>
                     ))}
                   </select>
+                  {newLead.leadSource === 'Website' && (
+                    <div className="mt-1 text-xs text-green-600">
+                      ✓ Website leads are automatically processed
+                    </div>
+                  )}
                 </div>
                 
                 <div className="sm:col-span-2">
@@ -722,28 +959,42 @@ const Leads = () => {
                 </div>
                 
                 <div className="sm:col-span-6 space-y-4">
-                  <div className="h-[400px] w-full rounded-lg overflow-hidden shadow-md">
-                    <div ref={mapRef} className="h-full w-full" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Latitude</label>
-                      <input
-                        type="text"
-                        value={newLead.coordinates[1] || ''}
-                        readOnly
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary sm:text-sm bg-gray-50"
-                      />
+                  {/* Location Section */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Location Selection
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (navigator.geolocation) {
+                            navigator.geolocation.getCurrentPosition((position) => {
+                              const lat = position.coords.latitude;
+                              const lng = position.coords.longitude;
+                              setNewLead(prev => ({
+                                ...prev,
+                                coordinates: [lng, lat]
+                              }));
+                            });
+                          }
+                        }}
+                        className="inline-flex items-center px-3 py-1 border border-blue-300 rounded-md text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100"
+                      >
+                        📍 Use Current Location
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Longitude</label>
-                      <input
-                        type="text"
-                        value={newLead.coordinates[0] || ''}
-                        readOnly
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-primary focus:border-primary sm:text-sm bg-gray-50"
-                      />
-                    </div>
+                    <GPSMapPicker
+                      onLocationSelect={(lat, lng) => {
+                        setNewLead(prev => ({
+                          ...prev,
+                          coordinates: [lng, lat]
+                        }));
+                      }}
+                      initialLat={newLead.coordinates[1]}
+                      initialLng={newLead.coordinates[0]}
+                    />
+
                   </div>
                   <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
                     Notes
@@ -859,7 +1110,18 @@ const Leads = () => {
                       {lead.carModel}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {lead.assignedWasher?.name || 'Unassigned'}
+                      <div className="flex items-center justify-between">
+                        <span>{lead.assignedWasher?.name || 'Unassigned'}</span>
+                        <button
+                          onClick={() => {
+                            setSelectedLead(lead);
+                            setShowAssignModal(true);
+                          }}
+                          className="ml-2 text-blue-600 hover:text-blue-800 text-xs"
+                        >
+                          {lead.assignedWasher ? 'Reassign' : 'Assign'}
+                        </button>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       <div className="flex items-center">
@@ -872,16 +1134,20 @@ const Leads = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
                       <button
+                        onClick={() => {
+                          setEditLead(lead);
+                          setShowEditModal(true);
+                        }}
+                        className="text-gray-600 hover:text-gray-900"
+                        title="Edit Lead"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={() => navigate(`/user/${lead.id}`)}
                         className="text-blue-600 hover:text-blue-900"
                       >
                         View
-                      </button>
-                      <button
-                        onClick={() => handleUpdateLead(lead.id, { status: 'completed' })}
-                        className="text-green-600 hover:text-green-900"
-                      >
-                        Complete
                       </button>
                       <button
                         onClick={() => handleDeleteLead(lead.id)}
@@ -942,6 +1208,377 @@ const Leads = () => {
           </div>
         </div>
       </div>
+
+      {/* Assign Washer Modal */}
+      {showAssignModal && selectedLead && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Assign Washer to {selectedLead.customerName}
+            </h3>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Washer
+              </label>
+              <select
+                value={selectedWasher}
+                onChange={(e) => setSelectedWasher(e.target.value)}
+                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md"
+              >
+                <option value="">Select a washer</option>
+                {washers.map((washer) => (
+                  <option key={washer.id} value={washer.id}>
+                    {washer.name} (ID: {washer.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowAssignModal(false);
+                  setSelectedLead(null);
+                  setSelectedWasher('');
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssignWasher}
+                disabled={!selectedWasher}
+                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              >
+                Assign
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assign One-Time Wash Modal */}
+      {showOneTimeModal && selectedLead && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Assign One-Time Wash for {selectedLead.customerName}
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Wash Type</label>
+                <select
+                  value={oneTimeData.washType}
+                  onChange={(e) => setOneTimeData({...oneTimeData, washType: e.target.value})}
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md"
+                >
+                  <option value="Basic">Basic</option>
+                  <option value="Premium">Premium</option>
+                  <option value="Deluxe">Deluxe</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Amount (₹)</label>
+                <input
+                  type="number"
+                  value={oneTimeData.amount}
+                  onChange={(e) => setOneTimeData({...oneTimeData, amount: e.target.value})}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                  placeholder="Enter amount"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Scheduled Date</label>
+                <input
+                  type="date"
+                  value={oneTimeData.scheduledDate}
+                  onChange={(e) => setOneTimeData({...oneTimeData, scheduledDate: e.target.value})}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                  min={new Date().toISOString().split('T')[0]}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Assign Washer</label>
+                <select
+                  value={oneTimeData.washerId}
+                  onChange={(e) => setOneTimeData({...oneTimeData, washerId: e.target.value})}
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md"
+                >
+                  <option value="">Select a washer</option>
+                  {washers.map((washer) => (
+                    <option key={washer.id} value={washer.id}>
+                      {washer.name} (ID: {washer.id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowOneTimeModal(false);
+                  setSelectedLead(null);
+                  setOneTimeData({
+                    washType: 'Basic',
+                    amount: '',
+                    scheduledDate: '',
+                    washerId: ''
+                  });
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAssignOneTimeWash}
+                className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+              >
+                Assign Wash
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Subscription Modal */}
+      {showSubscriptionModal && selectedLead && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Create Monthly Package for {selectedLead.customerName}
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Package Type</label>
+                <select
+                  value={subscriptionData.packageType}
+                  onChange={(e) => {
+                    const newPackageType = e.target.value;
+                    const washCounts = { 'Basic': 3, 'Premium': 4, 'Deluxe': 5 };
+                    const newDates = Array(washCounts[newPackageType]).fill('');
+                    setSubscriptionData({packageType: newPackageType, scheduledDates: newDates});
+                  }}
+                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm rounded-md"
+                >
+                  <option value="Basic">Basic (3 washes - ₹300)</option>
+                  <option value="Premium">Premium (4 washes - ₹400)</option>
+                  <option value="Deluxe">Deluxe (5 washes - ₹500)</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Schedule Wash Dates
+                </label>
+                <div className="space-y-2">
+                  {subscriptionData.scheduledDates.map((date, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <span className="text-sm w-16">Wash {index + 1}:</span>
+                      <input 
+                        type="date" 
+                        value={date}
+                        onChange={(e) => {
+                          const newDates = [...subscriptionData.scheduledDates];
+                          newDates[index] = e.target.value;
+                          setSubscriptionData({...subscriptionData, scheduledDates: newDates});
+                        }}
+                        className="flex-1 px-2 py-1 border rounded text-sm"
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowSubscriptionModal(false);
+                  setSelectedLead(null);
+                  setSubscriptionData({
+                    packageType: 'Basic',
+                    scheduledDates: ['', '', '']
+                  });
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateSubscription}
+                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+              >
+                Create Package
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Lead Modal */}
+      {showEditModal && editLead && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Edit Lead - {editLead.customerName}
+            </h3>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleUpdateLead(editLead.id, {
+                name: editLead.customerName,
+                phone: editLead.phone,
+                area: editLead.area,
+                carModel: editLead.carModel,
+                leadType: editLead.leadType,
+                leadSource: editLead.leadSource,
+                notes: editLead.notes,
+                status: editLead.status
+              });
+              setShowEditModal(false);
+              setEditLead(null);
+            }}>
+              <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Customer Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editLead.customerName}
+                    onChange={(e) => setEditLead({...editLead, customerName: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Phone Number
+                  </label>
+                  <input
+                    type="text"
+                    value={editLead.phone}
+                    onChange={(e) => setEditLead({...editLead, phone: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Area
+                  </label>
+                  <input
+                    type="text"
+                    value={editLead.area}
+                    onChange={(e) => setEditLead({...editLead, area: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Car Model
+                  </label>
+                  <input
+                    type="text"
+                    value={editLead.carModel}
+                    onChange={(e) => setEditLead({...editLead, carModel: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Lead Type
+                  </label>
+                  <select
+                    value={editLead.leadType}
+                    onChange={(e) => setEditLead({...editLead, leadType: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                  >
+                    <option value="One-time">One-time</option>
+                    <option value="Monthly">Monthly</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Lead Source
+                  </label>
+                  <select
+                    value={editLead.leadSource}
+                    onChange={(e) => setEditLead({...editLead, leadSource: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                  >
+                    {leadSourceOptions.map(source => (
+                      <option key={source} value={source}>{source}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Status
+                  </label>
+                  <select
+                    value={editLead.status}
+                    onChange={(e) => setEditLead({...editLead, status: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                  >
+                    <option value="New">New</option>
+                    <option value="Contacted">Contacted</option>
+                    <option value="Follow-up">Follow-up</option>
+                    <option value="Converted">Converted</option>
+                  </select>
+                </div>
+                
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={editLead.notes || ''}
+                    onChange={(e) => setEditLead({...editLead, notes: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditLead(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Update Lead
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

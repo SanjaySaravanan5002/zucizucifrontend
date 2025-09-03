@@ -1,12 +1,12 @@
 // Authentication service for handling API calls related to authentication
 
-const API_URL = 'http://localhost:5000/api';
+const API_URL = 'https://zuci-backend-my3h.onrender.com/api';
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'washer';
+  role: 'superadmin' | 'admin' | 'limited_admin' | 'washer';
 }
 
 export interface LoginResponse {

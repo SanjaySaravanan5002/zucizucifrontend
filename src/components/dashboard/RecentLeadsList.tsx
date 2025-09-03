@@ -45,7 +45,13 @@ const RecentLeadsList: FC = () => {
   useEffect(() => {
     const fetchLeads = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/dashboard/recent-leads');
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('https://zuci-backend-my3h.onrender.com/api/dashboard/recent-leads', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
         const data = await response.json();
         setLeads(data);
         setError(null);

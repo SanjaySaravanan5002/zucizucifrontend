@@ -18,7 +18,13 @@ const LeadsChart = () => {
 
     const fetchData = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/dashboard/lead-acquisition');
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('https://zuci-backend-my3h.onrender.com/api/dashboard/lead-acquisition', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
         const data: LeadData[] = await response.json();
 
         if (!isSubscribed || !chartRef.current) return;

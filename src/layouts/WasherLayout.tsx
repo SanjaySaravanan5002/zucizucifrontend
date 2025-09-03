@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Outlet, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Menu, X, LayoutDashboard, Users, Car, ClipboardList, BarChart3, LogOut, Bell, DollarSign, Clock, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Menu, X, LayoutDashboard, ClipboardList, Clock, LogOut, ChevronLeft, ChevronRight } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import Logo from '../components/Logo';
 
-const DashboardLayout = () => {
+const WasherLayout = () => {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -19,25 +19,14 @@ const DashboardLayout = () => {
     );
   }
   
-  if (!isAuthenticated) {
+  if (!isAuthenticated || user?.role !== 'washer') {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
   
-  if (user?.role === 'washer') {
-    return <Navigate to="/washer-dashboard" replace />;
-  }
-  
   const navigation = [
-    { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-    { name: 'Leads', href: '/leads', icon: ClipboardList },
-    { name: 'Customers', href: '/customers', icon: Users },
-    { name: 'Upcoming Wash', href: '/upcoming-wash', icon: Calendar },
-    { name: 'Washer Panel', href: '/washer', icon: Car },
-    { name: 'Attendance', href: '/attendance', icon: Clock },
-    { name: 'Schedule Wash', href: '/schedule-wash', icon: Calendar },
-    ...(user?.role === 'superadmin' ? [{ name: 'Revenue', href: '/revenue', icon: BarChart3 }] : []),
-    { name: 'Expenses', href: '/expenses', icon: DollarSign },
-    { name: 'Reports', href: '/reports', icon: BarChart3 },
+    { name: 'Dashboard', href: '/washer-dashboard', icon: LayoutDashboard },
+    { name: 'Assigned Leads', href: '/washer-dashboard/assigned-leads', icon: ClipboardList },
+    { name: 'Attendance', href: '/washer-dashboard/attendance', icon: Clock },
   ];
   
   const toggleSidebar = () => setSidebarOpen(!sidebarOpen);
@@ -46,22 +35,15 @@ const DashboardLayout = () => {
   const getIconColor = (itemName: string) => {
     const colors = {
       'Dashboard': 'text-blue-500 group-hover:text-blue-600',
-      'Leads': 'text-green-500 group-hover:text-green-600', 
-      'Customers': 'text-purple-500 group-hover:text-purple-600',
-      'Upcoming Wash': 'text-yellow-500 group-hover:text-yellow-600',
-      'Washer Panel': 'text-cyan-500 group-hover:text-cyan-600',
-      'Attendance': 'text-orange-500 group-hover:text-orange-600',
-      'Schedule Wash': 'text-teal-500 group-hover:text-teal-600',
-      'Revenue': 'text-emerald-500 group-hover:text-emerald-600',
-      'Expenses': 'text-red-500 group-hover:text-red-600',
-      'Reports': 'text-indigo-500 group-hover:text-indigo-600'
+      'Assigned Leads': 'text-green-500 group-hover:text-green-600',
+      'Attendance': 'text-orange-500 group-hover:text-orange-600'
     };
     return colors[itemName] || 'text-gray-500 group-hover:text-gray-700';
   };
   
   return (
     <div className="flex h-screen bg-gray-50">
-      {/* Sidebar for mobile */}
+      {/* Mobile sidebar overlay */}
       <div 
         className={`fixed inset-0 z-40 bg-gray-800 bg-opacity-60 transition-opacity duration-300 lg:hidden ${
           sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'
@@ -101,6 +83,14 @@ const DashboardLayout = () => {
         </div>
         
         <div className="mt-6 px-4 pb-4">
+          <div className={twMerge(
+            "mb-6 p-3 bg-blue-50 rounded-lg transition-all duration-300",
+            sidebarCollapsed ? "lg:opacity-0 lg:h-0 lg:mb-0 lg:p-0 lg:overflow-hidden" : "opacity-100"
+          )}>
+            <div className="text-sm font-medium text-blue-900">Welcome, {user?.name}</div>
+            <div className="text-xs text-blue-600">Washer Dashboard</div>
+          </div>
+          
           <nav className="space-y-1">
             {navigation.map((item) => {
               const isActive = location.pathname === item.href;
@@ -191,10 +181,6 @@ const DashboardLayout = () => {
             </div>
             
             <div className="flex items-center space-x-4">
-              <button className="relative p-1 text-gray-500 hover:text-gray-700">
-                <Bell size={20} />
-                <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500"></span>
-              </button>
               <div className="flex items-center space-x-2">
                 <div className="h-8 w-8 rounded-full bg-primary text-white flex items-center justify-center">
                   {user?.name.charAt(0)}
@@ -216,4 +202,4 @@ const DashboardLayout = () => {
   );
 };
 
-export default DashboardLayout;
+export default WasherLayout;

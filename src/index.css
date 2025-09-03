@@ -23,65 +23,229 @@
 }
 
 :root {
-  --primary: #3B82F6;
-  --primary-dark: #2563EB;
-  --primary-light: #93C5FD;
-  --secondary: #0D9488;
-  --secondary-dark: #0F766E;
-  --secondary-light: #5EEAD4;
-  --accent: #F97316;
-  --accent-dark: #EA580C;
-  --accent-light: #FDBA74;
+  /* Car Wash Professional Color Palette */
+  --primary: #1E40AF;
+  --primary-dark: #1E3A8A;
+  --primary-light: #3B82F6;
+  --secondary: #0891B2;
+  --secondary-dark: #0E7490;
+  --secondary-light: #06B6D4;
+  --accent: #059669;
+  --accent-dark: #047857;
+  --accent-light: #10B981;
+  --warning: #D97706;
+  --danger: #DC2626;
+  --success: #059669;
+  --info: #0891B2;
+  
+  /* Glass morphism */
+  --glass-bg: rgba(255, 255, 255, 0.25);
+  --glass-border: rgba(255, 255, 255, 0.18);
+  --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+  
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%);
+  --gradient-secondary: linear-gradient(135deg, #0891B2 0%, #06B6D4 100%);
+  --gradient-success: linear-gradient(135deg, #059669 0%, #10B981 100%);
+  --gradient-wash: linear-gradient(90deg, #1E40AF 0%, #0891B2 25%, #059669 50%, #D97706 75%, #DC2626 100%);
 }
 
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
+    scroll-behavior: smooth;
   }
   
   body {
-    @apply bg-gray-50;
+    @apply bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 min-h-screen;
+    background-attachment: fixed;
+  }
+  
+  * {
+    @apply transition-colors duration-200;
   }
 }
 
 @layer components {
-  .bg-primary {
-    background-color: var(--primary);
+  /* Professional Car Wash Components */
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    @apply rounded-xl;
   }
   
-  .bg-primary-dark {
-    background-color: var(--primary-dark);
+  .floating-card {
+    @apply transform transition-all duration-300 ease-out;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
   }
   
-  .bg-primary-light {
-    background-color: var(--primary-light);
+  .floating-card:hover {
+    @apply -translate-y-1;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   }
   
-  .text-primary {
-    color: var(--primary);
+  .btn-primary {
+    background: var(--gradient-primary);
+    @apply text-white font-medium px-6 py-3 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-105 hover:shadow-xl;
   }
   
-  .text-primary-dark {
-    color: var(--primary-dark);
+  .btn-secondary {
+    background: var(--gradient-secondary);
+    @apply text-white font-medium px-6 py-3 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-105 hover:shadow-xl;
   }
   
-  .text-primary-light {
-    color: var(--primary-light);
+  .btn-success {
+    background: var(--gradient-success);
+    @apply text-white font-medium px-6 py-3 rounded-lg shadow-lg transition-all duration-200 transform hover:scale-105 hover:shadow-xl;
   }
   
-  .hover\:bg-primary-dark:hover {
-    background-color: var(--primary-dark);
+  .btn-liquid {
+    @apply relative overflow-hidden;
   }
   
-  .focus\:ring-primary:focus {
-    --tw-ring-color: var(--primary);
+  .btn-liquid::before {
+    content: '';
+    @apply absolute top-0 -left-full w-full h-full transition-all duration-500;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
   }
   
-  .focus\:border-primary:focus {
-    border-color: var(--primary);
+  .btn-liquid:hover::before {
+    @apply left-full;
   }
   
-  .hover\:text-primary-dark:hover {
-    color: var(--primary-dark);
+  .status-dot {
+    @apply relative inline-block w-2 h-2 rounded-full;
+  }
+  
+  .status-dot.online {
+    background: var(--success);
+  }
+  
+  .status-dot.online::after {
+    content: '';
+    @apply absolute -top-0.5 -left-0.5 -right-0.5 -bottom-0.5 rounded-full;
+    border: 2px solid var(--success);
+    animation: pulse-ring 1.5s infinite;
+  }
+  
+  /* Legacy color classes for compatibility */
+  .bg-primary { background-color: var(--primary); }
+  .bg-primary-dark { background-color: var(--primary-dark); }
+  .bg-primary-light { background-color: var(--primary-light); }
+  .text-primary { color: var(--primary); }
+  .text-primary-dark { color: var(--primary-dark); }
+  .text-primary-light { color: var(--primary-light); }
+  .hover\:bg-primary-dark:hover { background-color: var(--primary-dark); }
+  .focus\:ring-primary:focus { --tw-ring-color: var(--primary); }
+  .focus\:border-primary:focus { border-color: var(--primary); }
+  .hover\:text-primary-dark:hover { color: var(--primary-dark); }
+}
+@layer utilities {
+  /* Professional Animations */
+  .animate-bounce-subtle {
+    animation: bounce-subtle 2s infinite;
+  }
+  
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite alternate;
+  }
+  
+  .animate-slide-up {
+    animation: slide-up 0.4s ease-out;
+  }
+  
+  .animate-fade-in-up {
+    animation: fade-in-up 0.6s ease-out;
+  }
+  
+  .animate-scale-in {
+    animation: scale-in 0.3s ease-out;
+  }
+  
+  .animate-shimmer {
+    animation: shimmer 2s linear infinite;
+  }
+  
+  /* Loading States */
+  .skeleton {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200px 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  
+  /* Touch-friendly for mobile */
+  .touch-target {
+    @apply min-h-11 min-w-11;
+  }
+}
+
+/* Keyframe Animations */
+@keyframes bounce-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes pulse-glow {
+  from { box-shadow: 0 0 5px rgba(30, 64, 175, 0.5); }
+  to { box-shadow: 0 0 20px rgba(30, 64, 175, 0.8), 0 0 30px rgba(30, 64, 175, 0.4); }
+}
+
+@keyframes slide-up {
+  from { transform: translateY(15px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fade-in-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+/* Car Wash Specific Animations */
+@keyframes wash-cycle {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes drop-fall {
+  0% { top: -10px; opacity: 1; }
+  100% { top: 20px; opacity: 0; }
+}
+
+/* Responsive Design Enhancements */
+@media (hover: none) and (pointer: coarse) {
+  .hover\:scale-105:hover {
+    transform: none;
+  }
+  
+  .floating-card:hover {
+    transform: none;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .glass-card {
+    background: white !important;
+    backdrop-filter: none !important;
+    border: 1px solid #e5e7eb !important;
+    box-shadow: none !important;
   }
 }

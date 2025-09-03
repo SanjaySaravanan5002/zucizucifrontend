@@ -5,6 +5,8 @@ import {
   User, ArrowUpDown 
 } from 'lucide-react';
 import TypeBadge from '../components/common/TypeBadge';
+import LoadingSpinner from '../components/ui/LoadingSpinner';
+import Card from '../components/ui/Card';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 
@@ -27,31 +29,41 @@ interface Customer {
     date: string;
     feedback?: string;
     washStatus: string;
+    washServiceType?: string;
   }>;
 }
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = 'https://zuci-backend-my3h.onrender.com/api';
 
 // API functions
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('auth_token');
+  return {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  };
+};
+
 const api = {
   getCustomers: async (filters: any) => {
     const response = await axios.get(`${API_BASE_URL}/leads`, { 
-      params: { ...filters, status: 'Converted' } 
+      params: { ...filters, status: 'Converted' },
+      ...getAuthHeaders()
     });
     return response.data;
   },
   updateCustomer: async (id: number | string, updates: any) => {
-    const response = await axios.put(`${API_BASE_URL}/leads/${id}`, updates);
+    const response = await axios.put(`${API_BASE_URL}/leads/${id}`, updates, getAuthHeaders());
     return response.data;
   },
   deleteCustomer: async (id: number | string) => {
-    const response = await axios.delete(`${API_BASE_URL}/leads/${id}`);
+    const response = await axios.delete(`${API_BASE_URL}/leads/${id}`, getAuthHeaders());
     return response.data;
   },
-  getCustomerStats: async (filters: any) => {
-    const response = await axios.get(`${API_BASE_URL}/leads/stats/overview`, {
-      params: { ...filters, status: 'Converted' }
-    });
+  getCustomerStats: async () => {
+    const response = await axios.get(`${API_BASE_URL}/dashboard/customer-stats`, getAuthHeaders());
     return response.data;
   }
 };
@@ -77,15 +89,36 @@ const Customers = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const token = localStorage.getItem('auth_token');
+      
+      if (!token) {
+        toast.error('Please login to access customers');
+        return;
+      }
+      
       const [customersData, statsData] = await Promise.all([
-        api.getCustomers({ ...filters, search: searchQuery, page }),
-        api.getCustomerStats(filters)
+        api.getCustomers({ ...filters, search: searchQuery, page }).catch(err => {
+          console.warn('Failed to fetch customers:', err);
+          return { customers: [], total: 0 };
+        }),
+        api.getCustomerStats().catch(err => {
+          console.warn('Failed to fetch stats:', err);
+          return { totalCustomers: 0, totalWashes: 0, activeAreas: 0, monthlyCustomers: 0, monthlyPercentage: '0.0' };
+        })
       ]);
-      setCustomers(customersData.customers || customersData);
-      setTotalPages(Math.ceil((customersData.total || customersData.length) / 10));
+      
+      setCustomers(Array.isArray(customersData.customers) ? customersData.customers : Array.isArray(customersData) ? customersData : []);
+      setTotalPages(Math.ceil((customersData.total || customersData.length || 0) / 10));
       setStats(statsData);
     } catch (error: any) {
-      toast.error('Failed to fetch customers');
+      console.error('Error fetching customers:', error);
+      if (error.response?.status === 401) {
+        toast.error('Authentication required. Please login again.');
+      } else {
+        toast.error('Failed to fetch customers');
+      }
+      setCustomers([]);
+      setStats({ totalCustomers: 0, totalWashes: 0, activeAreas: 0, monthlyCustomers: 0, monthlyPercentage: '0.0' });
     } finally {
       setLoading(false);
     }
@@ -143,29 +176,17 @@ const Customers = () => {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-dark"></div>
-        </div>
+      <div className="flex items-center justify-center h-96">
+        <LoadingSpinner size="lg" variant="wash" />
       </div>
     );
   }
 
   return (
-    <div className="p-6">
+    <div className="min-h-screen p-6">
       {/* Stats Overview */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <div className="bg-white p-4 rounded-lg shadow">
-            <h3 className="text-sm font-medium text-gray-500 mb-2">Total Revenue</h3>
-            <p className="text-2xl font-semibold text-gray-900">
-              ₹{stats.totalRevenue?.toLocaleString() || 0}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              From {stats.totalCustomers || customers.length} customers
-            </p>
-          </div>
-
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="bg-white p-4 rounded-lg shadow">
             <h3 className="text-sm font-medium text-gray-500 mb-2">Wash Statistics</h3>
             <p className="text-2xl font-semibold text-gray-900">
@@ -179,7 +200,7 @@ const Customers = () => {
           <div className="bg-white p-4 rounded-lg shadow">
             <h3 className="text-sm font-medium text-gray-500 mb-2">Area Coverage</h3>
             <p className="text-2xl font-semibold text-gray-900">
-              {Object.keys(stats.areaDistribution || {}).length}
+              {stats.activeAreas || 0}
             </p>
             <p className="text-sm text-gray-500 mt-1">
               Areas with active customers
@@ -189,10 +210,10 @@ const Customers = () => {
           <div className="bg-white p-4 rounded-lg shadow">
             <h3 className="text-sm font-medium text-gray-500 mb-2">Monthly Customers</h3>
             <p className="text-2xl font-semibold text-gray-900">
-              {stats.customersByType?.Monthly || 0}
+              {stats.monthlyCustomers || 0}
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              {((stats.customersByType?.Monthly || 0) / (stats.totalCustomers || 1) * 100).toFixed(1)}% of total
+              {stats.monthlyPercentage || '0.0'}% of total
             </p>
           </div>
         </div>
@@ -203,8 +224,7 @@ const Customers = () => {
           <h1 className="text-2xl font-semibold text-gray-900">Customers</h1>
           {stats && (
             <p className="mt-1 text-sm text-gray-500">
-              {stats.totalCustomers || customers.length} total customers | 
-              ₹{stats.totalRevenue?.toLocaleString() || 0} revenue
+              {stats.totalCustomers || customers.length} total customers
             </p>
           )}
         </div>
@@ -370,7 +390,7 @@ const Customers = () => {
                             {new Date(customer.washHistory[0].date).toLocaleDateString()}
                           </div>
                           <div className="text-sm text-gray-500">
-                            {customer.washHistory[0].washType}
+                            {customer.washHistory[0].washType} - {customer.washHistory[0].washServiceType || 'Exterior'}
                           </div>
                         </div>
                       ) : (

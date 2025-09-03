@@ -17,7 +17,13 @@ const PerformanceChart = () => {
 
     const fetchData = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/dashboard/washer-performance');
+        const token = localStorage.getItem('auth_token');
+        const response = await fetch('https://zuci-backend-my3h.onrender.com/api/dashboard/washer-performance', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
         const data: WasherData[] = await response.json();
 
         if (!isSubscribed || !chartRef.current) return;
