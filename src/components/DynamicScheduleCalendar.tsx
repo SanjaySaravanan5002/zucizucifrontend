@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, User } from 'lucide-react';
-import axios from 'axios';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-backend-my3h.onrender.com/api';
+import { apiService } from '../services/apiService';
 
 interface Customer {
   _id: string;
@@ -41,17 +39,14 @@ const DynamicScheduleCalendar = () => {
       const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
       
       const [scheduledRes, customersRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/schedule/scheduled-washes`, {
-          params: { startDate: startDate.toISOString(), endDate: endDate.toISOString() },
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-        }),
-        axios.get(`${API_BASE_URL}/leads?status=New`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
-        })
+        apiService.get(`/schedule/scheduled-washes?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`),
+        apiService.get('/leads?status=New')
       ]);
       
-      setScheduledWashes(scheduledRes.data.data || scheduledRes.data);
-      setUnassignedCustomers(customersRes.data.filter((c: Customer) => !c.assignedWasher));
+      if (scheduledRes.success && customersRes.success) {
+        setScheduledWashes(scheduledRes.data?.data || scheduledRes.data || []);
+        setUnassignedCustomers((customersRes.data || []).filter((c: Customer) => !c.assignedWasher));
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -108,17 +103,17 @@ const DynamicScheduleCalendar = () => {
     if (!draggedCustomer) return;
 
     try {
-      await axios.post(`${API_BASE_URL}/schedule/assign-to-date`, {
+      const response = await apiService.post('/schedule/assign-to-date', {
         leadId: draggedCustomer._id,
         targetDate: date.toISOString(),
         washType: draggedCustomer.leadType
-      }, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('auth_token')}` }
       });
 
-      // Remove from unassigned and refresh
-      setUnassignedCustomers(prev => prev.filter(c => c._id !== draggedCustomer._id));
-      fetchData();
+      if (response.success) {
+        // Remove from unassigned and refresh
+        setUnassignedCustomers(prev => prev.filter(c => c._id !== draggedCustomer._id));
+        fetchData();
+      }
     } catch (error) {
       console.error('Error assigning customer:', error);
     }
@@ -230,6 +225,52 @@ const DynamicScheduleCalendar = () => {
                     
                     {/* Drop zone indicator */}
                     {draggedCustomer && (
+                      <div className="border-2 border-dashed border-green-400 bg-green-50 p-2 rounded text-xs text-green-700 text-center">
+                        Drop here to assign
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {loading && (
+        <div className="fixed top-4 right-4 bg-white shadow-lg rounded p-3 flex items-center space-x-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          <span className="text-sm">Updating...</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default DynamicScheduleCalendar;                 {draggedCustomer && (
+                      <div className="border-2 border-dashed border-green-400 bg-green-50 p-2 rounded text-xs text-green-700 text-center">
+                        Drop here to assign
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {loading && (
+        <div className="fixed top-4 right-4 bg-white shadow-lg rounded p-3 flex items-center space-x-2">
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+          <span className="text-sm">Updating...</span>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default DynamicScheduleCalendar;                 {draggedCustomer && (
                       <div className="border-2 border-dashed border-green-400 bg-green-50 p-2 rounded text-xs text-green-700 text-center">
                         Drop here to assign
                       </div>
