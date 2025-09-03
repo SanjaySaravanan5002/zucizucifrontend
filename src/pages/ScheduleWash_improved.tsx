@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, User, Phone, MapPin, Car, Download, Search, RefreshCw, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-backend-my3h.onrender.com/api';
 
 interface ScheduledWash {
   _id: string;
