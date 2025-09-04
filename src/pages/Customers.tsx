@@ -97,7 +97,7 @@ const Customers = () => {
       }
       
       const [customersData, statsData] = await Promise.all([
-        api.getCustomers({ ...filters, search: searchQuery, page }).catch(err => {
+        api.getCustomers({ ...filters, searchQuery: searchQuery, page }).catch(err => {
           console.warn('Failed to fetch customers:', err);
           return { customers: [], total: 0 };
         }),
