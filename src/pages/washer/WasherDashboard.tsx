@@ -48,11 +48,11 @@ const WasherDashboard = () => {
       if (!user?.id) return;
       
       // Fetch washer dashboard stats
-      const dashboardResponse = await axios.get(`https://zuci-backend-my3h.onrender.com/api/washer/${user.id}/dashboard`);
+      const dashboardResponse = await axios.get(`https://zuci-sbackend.onrender.com/api/washer/${user.id}/dashboard`);
       const dashboardData = dashboardResponse.data;
       
       // Fetch assigned leads for display
-      const leadsResponse = await axios.get(`https://zuci-backend-my3h.onrender.com/api/washer/${user.id}/assigned-leads`);
+      const leadsResponse = await axios.get(`https://zuci-sbackend.onrender.com/api/washer/${user.id}/assigned-leads`);
       const responseData = leadsResponse.data;
       const allLeads = responseData.allLeads || responseData || [];
       
@@ -80,7 +80,7 @@ const WasherDashboard = () => {
   const handleAttendance = async (type: 'in' | 'out') => {
     try {
       const token = localStorage.getItem('token');
-      await axios.post('https://zuci-backend-my3h.onrender.com/api/washer/attendance', {
+      await axios.post('https://zuci-sbackend.onrender.com/api/washer/attendance', {
         washerId: user?.id,
         type
       }, {

@@ -10,6 +10,7 @@ import LeadsChart from '../components/dashboard/LeadsChart';
 import RecentLeadsList from '../components/dashboard/RecentLeadsList';
 import PerformanceChart from '../components/dashboard/PerformanceChart';
 import { apiService } from '../services/apiService';
+import MonthlyCustomerDebug from '../components/MonthlyCustomerDebug';
 
 interface WasherAttendance {
   name: string;
@@ -739,6 +740,11 @@ const Dashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Debug Panel for Monthly Customers */}
+      {user?.role === 'superadmin' && (
+        <MonthlyCustomerDebug />
+      )}
 
       {/* Recent leads section */}
       <div className="glass-card floating-card animate-fade-in-up overflow-hidden mt-8">

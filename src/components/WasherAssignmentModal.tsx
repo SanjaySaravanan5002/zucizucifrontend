@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, User, Calendar } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-backend-my3h.onrender.com/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-sbackend.onrender.com/api';
 
 interface Washer {
   _id: string;

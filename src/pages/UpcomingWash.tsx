@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Calendar, Eye, Phone, Car, MapPin } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import axios from 'axios';
+import { apiService } from '../services/apiService';
 
 interface UpcomingWash {
   id: number;
@@ -32,22 +32,27 @@ const UpcomingWash = () => {
 
   useEffect(() => {
     fetchUpcomingWashes();
-  }, [dateFilter, typeFilter, sourceFilter]);
+  }, [dateFilter, typeFilter, sourceFilter, searchQuery]);
 
   const fetchUpcomingWashes = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('auth_token');
-      const response = await axios.get('https://zuci-backend-my3h.onrender.com/api/leads/upcoming-washes', {
-        headers: { 'Authorization': `Bearer ${token}` },
-        params: {
-          date: dateFilter,
-          type: typeFilter,
-          source: sourceFilter,
-          search: searchQuery
-        }
+      const response = await apiService.getUpcomingWashes({
+        date: dateFilter,
+        type: typeFilter,
+        source: sourceFilter,
+        search: searchQuery
       });
-      setCustomers(response.data);
+      
+      if (response.success) {
+        const data = response.data || [];
+        console.log('API Response:', data);
+        console.log('Monthly customers found:', data.filter((c: any) => c.leadType === 'Monthly').map((c: any) => c.customerName));
+        setCustomers(data);
+      } else {
+        console.error('API Error:', response.error);
+        setCustomers([]);
+      }
     } catch (error) {
       console.error('Error fetching upcoming washes:', error);
       setCustomers([]);
@@ -56,11 +61,8 @@ const UpcomingWash = () => {
     }
   };
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    customer.phone.includes(searchQuery) ||
-    customer.area.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Remove client-side filtering since API already handles search
+  const filteredCustomers = customers;
 
   const getDateFilterText = () => {
     switch (dateFilter) {

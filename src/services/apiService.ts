@@ -1,5 +1,5 @@
 // Centralized API service for handling authenticated requests
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-backend-my3h.onrender.com/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-sbackend.onrender.com/api';
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -11,9 +11,12 @@ interface ApiResponse<T = any> {
 class ApiService {
   private getAuthHeaders(): HeadersInit {
     const token = localStorage.getItem('auth_token');
+    if (!token) {
+      throw new Error('Authentication token not found. Please login again.');
+    }
     return {
       'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
+      'Authorization': `Bearer ${token}`
     };
   }
 
@@ -177,7 +180,42 @@ class ApiService {
 
   // Test connectivity
   async testConnection() {
-    return this.get('/dashboard/test');
+    try {
+      return await this.get('/dashboard/test');
+    } catch (error) {
+      return {
+        success: false,
+        error: 'Unable to connect to backend service'
+      };
+    }
+  }
+
+  // Monthly customer specific methods
+  async getUpcomingWashes(params?: { date?: string; type?: string; source?: string; search?: string }) {
+    const queryParams = new URLSearchParams();
+    if (params?.date) queryParams.append('date', params.date);
+    if (params?.type) queryParams.append('type', params.type);
+    if (params?.source) queryParams.append('source', params.source);
+    if (params?.search) queryParams.append('search', params.search);
+    
+    const queryString = queryParams.toString();
+    return this.get(`/leads/upcoming-washes${queryString ? '?' + queryString : ''}`);
+  }
+
+  async getScheduledWashes(startDate: string, endDate: string) {
+    return this.get(`/schedule/scheduled-washes?startDate=${startDate}&endDate=${endDate}`);
+  }
+
+  async getMonthlySubscription(leadId: number) {
+    return this.get(`/leads/${leadId}/monthly-subscription`);
+  }
+
+  async createMonthlySubscription(leadId: number, data: { packageType: string; scheduledDates: string[] }) {
+    return this.post(`/leads/${leadId}/monthly-subscription`, data);
+  }
+
+  async updateWashStatus(leadId: number, washId: string, data: { status: string; amount?: number; feedback?: string; washerId?: string }) {
+    return this.put(`/leads/${leadId}/monthly-subscription/wash/${washId}`, data);
   }
 }
 

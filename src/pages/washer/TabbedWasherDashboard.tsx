@@ -59,7 +59,7 @@ const TabbedWasherDashboard = () => {
 
   const fetchDashboardStats = async () => {
     try {
-      const response = await axios.get(`https://zuci-backend-my3h.onrender.com/api/washer/${user?.id}/dashboard`);
+      const response = await axios.get(`https://zuci-sbackend.onrender.com/api/washer/${user?.id}/dashboard`);
       setDashboardStats(response.data.stats);
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
@@ -69,7 +69,7 @@ const TabbedWasherDashboard = () => {
 
   const fetchAssignedLeads = async () => {
     try {
-      const response = await axios.get(`https://zuci-backend-my3h.onrender.com/api/washer/${user?.id}/assigned-leads`);
+      const response = await axios.get(`https://zuci-sbackend.onrender.com/api/washer/${user?.id}/assigned-leads`);
       // Handle new API response structure
       if (response.data.allLeads) {
         setLeads(response.data.allLeads);
@@ -86,7 +86,7 @@ const TabbedWasherDashboard = () => {
 
   const fetchTodayAttendance = async () => {
     try {
-      const response = await axios.get(`https://zuci-backend-my3h.onrender.com/api/washer/${user?.id}/attendance`);
+      const response = await axios.get(`https://zuci-sbackend.onrender.com/api/washer/${user?.id}/attendance`);
       const today = new Date().toDateString();
       const todayRecord = response.data.attendance.find((record: any) => 
         new Date(record.date).toDateString() === today
@@ -107,7 +107,7 @@ const TabbedWasherDashboard = () => {
 
   const handleAttendance = async (type: 'in' | 'out') => {
     try {
-      await axios.post('https://zuci-backend-my3h.onrender.com/api/washer/attendance', {
+      await axios.post('https://zuci-sbackend.onrender.com/api/washer/attendance', {
         washerId: user?.id,
         type
       });
@@ -128,7 +128,7 @@ const TabbedWasherDashboard = () => {
     const washStatus = confirm('Is wash completed?') ? 'completed' : 'notcompleted';
     
     try {
-      await axios.put(`https://zuci-backend-my3h.onrender.com/api/washer/${user?.id}/update-wash/${leadId}`, {
+      await axios.put(`https://zuci-sbackend.onrender.com/api/washer/${user?.id}/update-wash/${leadId}`, {
         washStatus,
         amountPaid: paymentStatus,
         feedback

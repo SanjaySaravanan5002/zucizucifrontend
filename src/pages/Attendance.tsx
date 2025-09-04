@@ -68,7 +68,7 @@ const Attendance = () => {
         return;
       }
       
-      const response = await axios.get('https://zuci-backend-my3h.onrender.com/api/dashboard/washer-attendance', {
+      const response = await axios.get('https://zuci-sbackend.onrender.com/api/dashboard/washer-attendance', {
         params: dateFilter,
         headers: {
           'Authorization': `Bearer ${token}`,

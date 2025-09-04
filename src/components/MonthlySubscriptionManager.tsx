@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, CheckCircle, Clock, AlertCircle, Plus } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
+import { apiService } from '../services/apiService';
 
 interface ScheduledWash {
   _id: string;
@@ -52,13 +53,15 @@ const MonthlySubscriptionManager: React.FC<Props> = ({ leadId, leadType, onSubsc
 
   const fetchSubscription = async () => {
     try {
-      const response = await fetch(`/api/leads/${leadId}/monthly-subscription`);
-      if (response.ok) {
-        const data = await response.json();
-        setSubscription(data);
+      const response = await apiService.getMonthlySubscription(leadId);
+      if (response.success) {
+        setSubscription(response.data);
+      } else {
+        showToast('error', response.error || 'Failed to fetch subscription details');
       }
     } catch (error) {
       console.error('Error fetching subscription:', error);
+      showToast('error', 'Error loading subscription data');
     }
   };
 
@@ -70,23 +73,23 @@ const MonthlySubscriptionManager: React.FC<Props> = ({ leadId, leadType, onSubsc
 
     setLoading(true);
     try {
-      const response = await fetch(`/api/leads/${leadId}/monthly-subscription`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          packageType: selectedPackage,
-          scheduledDates
-        })
+      const response = await apiService.createMonthlySubscription(leadId, {
+        packageType: selectedPackage,
+        scheduledDates
       });
 
-      if (response.ok) {
+      if (response.success) {
         await fetchSubscription();
         setShowCreateForm(false);
         setScheduledDates([]);
         onSubscriptionUpdate?.();
+        showToast('success', 'Monthly subscription created successfully');
+      } else {
+        showToast('error', response.error || 'Failed to create subscription');
       }
     } catch (error) {
       console.error('Error creating subscription:', error);
+      showToast('error', 'Error creating subscription');
     } finally {
       setLoading(false);
     }
@@ -94,23 +97,23 @@ const MonthlySubscriptionManager: React.FC<Props> = ({ leadId, leadType, onSubsc
 
   const updateWashStatus = async (washId: string, status: string, amount?: number, feedback?: string) => {
     try {
-      const response = await fetch(`/api/leads/${leadId}/monthly-subscription/wash/${washId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status,
-          amount,
-          feedback,
-          washerId: subscription?.scheduledWashes.find(w => w._id === washId)?.washer
-        })
+      const response = await apiService.updateWashStatus(leadId, washId, {
+        status,
+        amount,
+        feedback,
+        washerId: subscription?.scheduledWashes.find(w => w._id === washId)?.washer
       });
 
-      if (response.ok) {
+      if (response.success) {
         await fetchSubscription();
         onSubscriptionUpdate?.();
+        showToast('success', 'Wash status updated successfully');
+      } else {
+        showToast('error', response.error || 'Failed to update wash status');
       }
     } catch (error) {
       console.error('Error updating wash status:', error);
+      showToast('error', 'Error updating wash status');
     }
   };
 
@@ -275,8 +278,10 @@ const MonthlySubscriptionManager: React.FC<Props> = ({ leadId, leadType, onSubsc
                       onClick={() => {
                         const amount = prompt('Enter wash amount:');
                         const feedback = prompt('Enter feedback (optional):');
-                        if (amount) {
+                        if (amount && !isNaN(parseInt(amount))) {
                           updateWashStatus(wash._id, 'completed', parseInt(amount), feedback || '');
+                        } else if (amount) {
+                          showToast('error', 'Please enter a valid amount');
                         }
                       }}
                       className="px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"

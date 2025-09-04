@@ -34,7 +34,7 @@ const Expenses: React.FC = () => {
   const fetchExpenses = async () => {
     try {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      const response = await axios.get('https://zuci-backend-my3h.onrender.com/api/expenses', {
+      const response = await axios.get('https://zuci-sbackend.onrender.com/api/expenses', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -53,7 +53,7 @@ const Expenses: React.FC = () => {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       
       // Use the same API as Revenue tab - fetch all-time revenue without date filters
-      const response = await axios.get('https://zuci-backend-my3h.onrender.com/api/reports/revenue_and_income', {
+      const response = await axios.get('https://zuci-sbackend.onrender.com/api/reports/revenue_and_income', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -89,7 +89,7 @@ const Expenses: React.FC = () => {
   const fetchWashers = async () => {
     try {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      const response = await axios.get('https://zuci-backend-my3h.onrender.com/api/expenses/washers', {
+      const response = await axios.get('https://zuci-sbackend.onrender.com/api/expenses/washers', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -103,7 +103,7 @@ const Expenses: React.FC = () => {
   const addExpense = async () => {
     try {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      await axios.post('https://zuci-backend-my3h.onrender.com/api/expenses', {
+      await axios.post('https://zuci-sbackend.onrender.com/api/expenses', {
         ...newExpense,
         amount: parseFloat(newExpense.amount)
       }, {
@@ -123,7 +123,7 @@ const Expenses: React.FC = () => {
   const deleteExpense = async (id: string) => {
     try {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      await axios.delete(`https://zuci-backend-my3h.onrender.com/api/expenses/${id}`, {
+      await axios.delete(`https://zuci-sbackend.onrender.com/api/expenses/${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

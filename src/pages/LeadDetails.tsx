@@ -7,7 +7,7 @@ import TypeBadge from '../components/common/TypeBadge';
 import StatusBadge from '../components/common/StatusBadge';
 import { useToast } from '../contexts/ToastContext';
 
-const API_BASE_URL = 'https://zuci-backend-my3h.onrender.com/api';
+const API_BASE_URL = 'https://zuci-sbackend.onrender.com/api';
 
 interface WasherDetails {
   id: number;

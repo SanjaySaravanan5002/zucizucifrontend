@@ -25,7 +25,7 @@ interface Lead {
   notes: string;
 }
 
-const API_BASE_URL = 'https://zuci-backend-my3h.onrender.com/api';
+const API_BASE_URL = 'https://zuci-sbackend.onrender.com/api';
 
 // API functions with authentication
 const getAuthHeaders = () => {
@@ -77,7 +77,7 @@ const Leads = () => {
   const [filters, setFilters] = useState({
     leadType: '',
     leadSource: '',
-    status: 'New',
+    status: '',
     dateRange: {
       start: '',
       end: ''
@@ -230,14 +230,16 @@ const Leads = () => {
         endDate: filters.dateRange.end
       };
       const data = await api.getLeads(queryParams);
-      setLeads(data);
+      // Filter out converted leads from the frontend display
+      const filteredData = data.filter(lead => lead.status !== 'Converted');
+      setLeads(filteredData);
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch leads');
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, filters]);
+  }, []);
 
   // Fetch stats
   const fetchStats = useCallback(async () => {
@@ -261,11 +263,19 @@ const Leads = () => {
     }
   }, []);
 
-  // Load data on mount and when filters change
+  // Load data on mount only
   useEffect(() => {
     fetchLeads();
     fetchWashers();
-  }, [fetchLeads, fetchWashers]);
+  }, []);
+
+  // Manual refresh when filters change
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      fetchLeads();
+    }, 500);
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, filters.leadType, filters.leadSource, filters.status, filters.dateRange.start, filters.dateRange.end]);
 
   useEffect(() => {
     fetchStats();
@@ -439,15 +449,21 @@ const Leads = () => {
   const handleDeleteLead = async (id: number) => {
     if (!window.confirm('Are you sure you want to delete this lead?')) return;
     
+    // Store original leads for potential restoration
+    const originalLeads = [...leads];
+    
     try {
-      setLoading(true);
+      // Immediately remove from UI for better UX
+      setLeads(prevLeads => prevLeads.filter(lead => lead.id !== id));
+      
       await api.deleteLead(id);
-      fetchLeads();
+      showToast('success', 'Lead deleted successfully');
       setError(null);
     } catch (err: any) {
+      // Restore the original leads if deletion failed
+      setLeads(originalLeads);
+      showToast('error', err.message || 'Failed to delete lead');
       setError(err.message || 'Failed to delete lead');
-    } finally {
-      setLoading(false);
     }
   };
 

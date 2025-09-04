@@ -40,12 +40,21 @@ const DynamicScheduleCalendar = () => {
       
       const [scheduledRes, customersRes] = await Promise.all([
         apiService.get(`/schedule/scheduled-washes?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`),
-        apiService.get('/leads?status=New')
+        apiService.get('/leads')
       ]);
+      
+      console.log('Scheduled washes response:', scheduledRes);
+      console.log('Customers response:', customersRes);
       
       if (scheduledRes.success && customersRes.success) {
         setScheduledWashes(scheduledRes.data?.data || scheduledRes.data || []);
-        setUnassignedCustomers((customersRes.data || []).filter((c: Customer) => !c.assignedWasher));
+        // Filter for unassigned customers, including monthly customers without scheduled washes
+        const allCustomers = customersRes.data || [];
+        const unassigned = allCustomers.filter((c: Customer) => 
+          c.leadType === 'Monthly' ? !c.assignedWasher : c.leadType === 'One-time' && !c.assignedWasher
+        );
+        setUnassignedCustomers(unassigned);
+        console.log('Unassigned customers:', unassigned.map((c: Customer) => `${c.customerName} (${c.leadType})`));
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -219,58 +228,13 @@ const DynamicScheduleCalendar = () => {
                           'bg-blue-100 text-blue-800'
                         }`}
                       >
-                        <div className="truncate">{wash.customerName}</div>
+                        <div className="truncate font-medium">{wash.customerName}</div>
+                        <div className="text-xs opacity-75">{wash.area || ''}</div>
                       </div>
                     ))}
                     
                     {/* Drop zone indicator */}
                     {draggedCustomer && (
-                      <div className="border-2 border-dashed border-green-400 bg-green-50 p-2 rounded text-xs text-green-700 text-center">
-                        Drop here to assign
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {loading && (
-        <div className="fixed top-4 right-4 bg-white shadow-lg rounded p-3 flex items-center space-x-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-          <span className="text-sm">Updating...</span>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default DynamicScheduleCalendar;                 {draggedCustomer && (
-                      <div className="border-2 border-dashed border-green-400 bg-green-50 p-2 rounded text-xs text-green-700 text-center">
-                        Drop here to assign
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {loading && (
-        <div className="fixed top-4 right-4 bg-white shadow-lg rounded p-3 flex items-center space-x-2">
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-          <span className="text-sm">Updating...</span>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default DynamicScheduleCalendar;                 {draggedCustomer && (
                       <div className="border-2 border-dashed border-green-400 bg-green-50 p-2 rounded text-xs text-green-700 text-center">
                         Drop here to assign
                       </div>

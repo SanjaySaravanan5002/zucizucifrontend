@@ -75,7 +75,7 @@ const WasherDetails = () => {
   const [attendance, setAttendance] = useState<{ attendance: AttendanceRecord[], stats: any } | null>(null);
   const [isMarkingAttendance, setIsMarkingAttendance] = useState(false);
 
-  const API_BASE_URL = 'https://zuci-backend-my3h.onrender.com/api';
+  const API_BASE_URL = 'https://zuci-sbackend.onrender.com/api';
 
   const fetchAttendance = async () => {
     if (!id) return;

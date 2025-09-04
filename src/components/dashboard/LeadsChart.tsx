@@ -19,7 +19,7 @@ const LeadsChart = () => {
     const fetchData = async () => {
       try {
         const token = localStorage.getItem('auth_token');
-        const response = await fetch('https://zuci-backend-my3h.onrender.com/api/dashboard/lead-acquisition', {
+        const response = await fetch('https://zuci-sbackend.onrender.com/api/dashboard/lead-acquisition', {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'

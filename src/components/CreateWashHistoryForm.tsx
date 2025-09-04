@@ -4,7 +4,7 @@ import AutoAssignmentNotification from './AutoAssignmentNotification';
 import MonthlySubscriptionCreator from './MonthlySubscriptionCreator';
 import { shouldAutoAssign, getDateLabel } from '../utils/dateUtils';
 
-const API_BASE_URL = 'https://zuci-backend-my3h.onrender.com/api';
+const API_BASE_URL = 'https://zuci-sbackend.onrender.com/api';
 
 interface CreateWashHistoryFormProps {
   leadId: string;

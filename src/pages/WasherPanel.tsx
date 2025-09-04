@@ -45,7 +45,7 @@ const WasherPanel = () => {
     password: ''
   });
 
-  const API_BASE_URL = 'https://zuci-backend-my3h.onrender.com/api';
+  const API_BASE_URL = 'https://zuci-sbackend.onrender.com/api';
 
   // Fetch washers list (all washers for management)
   useEffect(() => {
