@@ -31,6 +31,15 @@ interface Customer {
     washStatus: string;
     washServiceType?: string;
   }>;
+  monthlySubscription?: {
+    packageType: string;
+    scheduledWashes: Array<{
+      scheduledDate: string;
+      status: string;
+      completedDate?: string;
+      washServiceType?: string;
+    }>;
+  };
 }
 
 const API_BASE_URL = 'https://zuci-backend-my3h.onrender.com/api';
@@ -384,18 +393,51 @@ const Customers = () => {
                       <div className="text-sm text-gray-900">{customer.leadSource}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {customer.washHistory && customer.washHistory.length > 0 ? (
-                        <div>
-                          <div className="text-sm text-gray-900">
-                            {new Date(customer.washHistory[0].date).toLocaleDateString()}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            {customer.washHistory[0].washType} - {customer.washHistory[0].washServiceType || 'Exterior'}
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-500">No washes yet</span>
-                      )}
+                      {(() => {
+                        // For monthly customers, check both wash history and monthly subscription
+                        if (customer.leadType === 'Monthly' && customer.monthlySubscription) {
+                          const completedWashes = customer.monthlySubscription.scheduledWashes
+                            .filter(w => w.status === 'completed' && w.completedDate)
+                            .sort((a, b) => new Date(b.completedDate!).getTime() - new Date(a.completedDate!).getTime());
+                          
+                          if (completedWashes.length > 0) {
+                            const lastWash = completedWashes[0];
+                            return (
+                              <div>
+                                <div className="text-sm text-gray-900">
+                                  {new Date(lastWash.completedDate!).toLocaleDateString()}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {customer.monthlySubscription.packageType} - {lastWash.washServiceType || 'Exterior'}
+                                </div>
+                              </div>
+                            );
+                          }
+                        }
+                        
+                        // Fallback to wash history
+                        if (customer.washHistory && customer.washHistory.length > 0) {
+                          const completedWashes = customer.washHistory
+                            .filter(w => w.washStatus === 'completed')
+                            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                          
+                          if (completedWashes.length > 0) {
+                            const lastWash = completedWashes[0];
+                            return (
+                              <div>
+                                <div className="text-sm text-gray-900">
+                                  {new Date(lastWash.date).toLocaleDateString()}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  {lastWash.washType} - {lastWash.washServiceType || 'Exterior'}
+                                </div>
+                              </div>
+                            );
+                          }
+                        }
+                        
+                        return <span className="text-sm text-gray-500">No washes yet</span>;
+                      })()} 
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <TypeBadge type={customer.status} />
