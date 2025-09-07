@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, Edit, X, MapPin, Copy } from 'lucide-react';
 import { apiService } from '../services/apiService';
 
 interface Customer {
@@ -27,6 +27,14 @@ const DynamicScheduleCalendar = () => {
   const [unassignedCustomers, setUnassignedCustomers] = useState<Customer[]>([]);
   const [draggedCustomer, setDraggedCustomer] = useState<Customer | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedWash, setSelectedWash] = useState<ScheduledWash | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editData, setEditData] = useState({
+    scheduledDate: '',
+    washType: 'Basic',
+    washer: ''
+  });
+  const [washers, setWashers] = useState([]);
 
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -38,9 +46,10 @@ const DynamicScheduleCalendar = () => {
       const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
       
-      const [scheduledRes, customersRes] = await Promise.all([
+      const [scheduledRes, customersRes, washersRes] = await Promise.all([
         apiService.get(`/schedule/scheduled-washes?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`),
-        apiService.get('/leads')
+        apiService.get('/leads'),
+        apiService.get('/washer/list?forAssignment=true')
       ]);
       
       console.log('Scheduled washes response:', scheduledRes);
@@ -55,6 +64,10 @@ const DynamicScheduleCalendar = () => {
         );
         setUnassignedCustomers(unassigned);
         console.log('Unassigned customers:', unassigned.map((c: Customer) => `${c.customerName} (${c.leadType})`));
+      }
+      
+      if (washersRes.success) {
+        setWashers(washersRes.data || []);
       }
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -222,7 +235,15 @@ const DynamicScheduleCalendar = () => {
                     {washesForDate.map((wash, washIndex) => (
                       <div
                         key={washIndex}
-                        className={`text-xs px-2 py-1 rounded ${
+                        onClick={() => {
+                          setSelectedWash(wash);
+                          setEditData({
+                            scheduledDate: wash.scheduledDate.split('T')[0],
+                            washType: 'Basic',
+                            washer: ''
+                          });
+                        }}
+                        className={`text-xs px-2 py-1 rounded cursor-pointer hover:opacity-80 ${
                           wash.status === 'completed' ? 'bg-green-100 text-green-800' :
                           wash.status === 'assigned' ? 'bg-yellow-100 text-yellow-800' :
                           'bg-blue-100 text-blue-800'
@@ -251,6 +272,191 @@ const DynamicScheduleCalendar = () => {
         <div className="fixed top-4 right-4 bg-white shadow-lg rounded p-3 flex items-center space-x-2">
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
           <span className="text-sm">Updating...</span>
+        </div>
+      )}
+
+      {/* Customer Details Modal */}
+      {selectedWash && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Customer Details</h3>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setShowEditModal(true)}
+                  className="flex items-center space-x-1 px-3 py-1 bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md transition-colors"
+                  title="Edit Details"
+                >
+                  <Edit className="h-4 w-4" />
+                  <span className="text-sm font-medium">Edit</span>
+                </button>
+                <button
+                  onClick={() => setSelectedWash(null)}
+                  className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium text-gray-900">{selectedWash.customerName}</h4>
+                <p className="text-sm text-gray-600">Customer</p>
+              </div>
+              
+              <div>
+                <h4 className="font-medium text-gray-900">{selectedWash.phone}</h4>
+                <p className="text-sm text-gray-600">Phone</p>
+              </div>
+              
+              <div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium text-gray-900">{selectedWash.area}</h4>
+                    <p className="text-sm text-gray-600">Area</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedWash.area)}`;
+                      window.open(googleMapsUrl, '_blank');
+                    }}
+                    className="flex items-center space-x-1 px-2 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs transition-colors"
+                    title="Open in Google Maps"
+                  >
+                    <MapPin className="h-3 w-3" />
+                    <span>Location</span>
+                  </button>
+                </div>
+              </div>
+              
+              <div className="border-t pt-4">
+                <h4 className="font-medium text-gray-900 mb-2">Wash Details</h4>
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <span>🧽</span>
+                    <span className="text-sm">Type: Basic</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span>📅</span>
+                    <span className="text-sm">Date: {new Date(selectedWash.scheduledDate).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span>📊</span>
+                    <span className="text-sm">Status: {selectedWash.status === 'completed' ? '✅ Completed' : '⏳ Scheduled'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setSelectedWash(null)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && selectedWash && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold">Edit Wash Details</h3>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                const response = await apiService.put(`/leads/${selectedWash.leadId}/reschedule`, {
+                  newDate: editData.scheduledDate,
+                  washType: editData.washType
+                });
+                
+                if (response.success) {
+                  setShowEditModal(false);
+                  setSelectedWash(null);
+                  fetchData(); // Refresh calendar
+                }
+              } catch (error) {
+                console.error('Error updating wash:', error);
+              }
+            }}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Scheduled Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editData.scheduledDate}
+                    onChange={(e) => setEditData({...editData, scheduledDate: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Wash Type
+                  </label>
+                  <select
+                    value={editData.washType}
+                    onChange={(e) => setEditData({...editData, washType: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Basic">Basic</option>
+                    <option value="Premium">Premium</option>
+                    <option value="Deluxe">Deluxe</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Assigned Washer
+                  </label>
+                  <select
+                    value={editData.washer}
+                    onChange={(e) => setEditData({...editData, washer: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select Washer</option>
+                    {washers.map((washer: any) => (
+                      <option key={washer._id} value={washer.id}>
+                        {washer.name} (ID: {washer.id})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded hover:bg-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  Update
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

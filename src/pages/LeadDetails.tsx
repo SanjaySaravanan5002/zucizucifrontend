@@ -7,7 +7,7 @@ import TypeBadge from '../components/common/TypeBadge';
 import StatusBadge from '../components/common/StatusBadge';
 import { useToast } from '../contexts/ToastContext';
 
-const API_BASE_URL = 'https://zuci-sbackend.onrender.com/api';
+const API_BASE_URL = 'https://zuci-sbackend-6.onrender.com/api';
 
 interface WasherDetails {
   id: number;
@@ -111,6 +111,9 @@ const LeadDetails = () => {
   const [customInterval, setCustomInterval] = useState(7);
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [showAllDates, setShowAllDates] = useState(false);
+  const [numberOfCars, setNumberOfCars] = useState(1);
+  const [carNames, setCarNames] = useState([lead?.carModel || 'THAR']);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchWashHistory = async () => {
     try {
@@ -130,14 +133,7 @@ const LeadDetails = () => {
     const dates = [];
     const washDetails = [];
     const start = new Date(startDate);
-    let interval = 7;
-    
-    switch (schedulePattern) {
-      case 'weekly': interval = 7; break;
-      case 'biweekly': interval = 14; break;
-      case 'monthly': interval = 30; break;
-      case 'custom': interval = customInterval || 7; break;
-    }
+    const interval = customInterval || 7;
     
     // Time slots to distribute across (avoid peak hours)
     const timeSlots = ['08:00', '09:30', '11:00', '14:00', '15:30', '17:00'];
@@ -163,7 +159,17 @@ const LeadDetails = () => {
       // Distribute time slots to avoid conflicts
       const timeSlot = timeSlots[i % timeSlots.length];
       
-      washDetails.push({ serviceType, time: timeSlot });
+      // Auto-assign cars cyclically
+      const carIndex = i % numberOfCars;
+      const carName = carNames[carIndex] || `CAR${carIndex + 1}`;
+      const carNumber = `Car${carIndex + 1}`;
+      
+      washDetails.push({ 
+        serviceType, 
+        time: timeSlot, 
+        carNumber: carNumber,
+        carName: carName
+      });
     }
     
     setMonthlyPackageData({
@@ -321,23 +327,49 @@ const LeadDetails = () => {
             <div className="sm:col-span-1">
               <dt className="text-sm font-medium text-gray-500">Assigned To</dt>
               <dd className="mt-1 text-lg text-gray-900 flex items-center justify-between">
-                <span>{lead.assignedWasher?.name || 'Unassigned'}</span>
-                {lead.assignedWasher && (
-                  <button
-                    onClick={async () => {
+                {lead.assignedWasher ? (
+                  <>
+                    <span className="text-green-700 font-medium">{lead.assignedWasher.name}</span>
+                    <button
+                      onClick={async () => {
+                        try {
+                          const response = await axios.get(`${API_BASE_URL}/washer/${lead.assignedWasher?._id}`);
+                          setWasherDetails(response.data);
+                          setShowDetailsModal(true);
+                        } catch (err: any) {
+                          showToast('error', err.message || 'Failed to fetch washer details');
+                        }
+                      }}
+                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                    >
+                      <User className="h-4 w-4 mr-1" />
+                      View Details
+                    </button>
+                  </>
+                ) : (
+                  <select
+                    onChange={async (e) => {
+                      if (!e.target.value) return;
                       try {
-                        const response = await axios.get(`${API_BASE_URL}/washer/${lead.assignedWasher?._id}`);
-                        setWasherDetails(response.data);
-                        setShowDetailsModal(true);
-                      } catch (err: any) {
-                        showToast('error', err.message || 'Failed to fetch washer details');
+                        const response = await axios.put(`${API_BASE_URL}/leads/${id}/assign-washer`, {
+                          washerId: e.target.value
+                        });
+                        setLead(response.data);
+                        showToast('success', 'Washer assigned successfully!');
+                      } catch (err) {
+                        showToast('error', 'Failed to assign washer');
                       }
                     }}
-                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                    className="text-sm border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    defaultValue=""
                   >
-                    <User className="h-4 w-4 mr-1" />
-                    View Details
-                  </button>
+                    <option value="">Assign Washer</option>
+                    {washers.map((washer) => (
+                      <option key={washer._id} value={washer.id}>
+                        {washer.name} (ID: {washer.id})
+                      </option>
+                    ))}
+                  </select>
                 )}
               </dd>
             </div>
@@ -387,16 +419,29 @@ const LeadDetails = () => {
             <div className="sm:col-span-2 mt-6">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-medium text-gray-900">Wash History</h3>
-                <button
-                  onClick={() => {
-                    fetchWashers(); // Refresh washers to get latest active status
-                    setShowAddWashModal(true);
-                  }}
-                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
-                >
-                  <Plus className="-ml-1 mr-2 h-5 w-5" />
-                  Add Wash Entry
-                </button>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={() => {
+                      fetchWashHistory();
+                      fetchWashers();
+                      setRefreshKey(prev => prev + 1);
+                      showToast('info', 'Data refreshed!');
+                    }}
+                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                  >
+                    🔄 Refresh
+                  </button>
+                  <button
+                    onClick={() => {
+                      fetchWashers(); // Refresh washers to get latest active status
+                      setShowAddWashModal(true);
+                    }}
+                    className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                  >
+                    <Plus className="-ml-1 mr-2 h-5 w-5" />
+                    Add Wash Entry
+                  </button>
+                </div>
               </div>
               {historyLoading ? (
                 <div className="text-center py-4">Loading wash history...</div>
@@ -434,7 +479,36 @@ const LeadDetails = () => {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {entry.washer?.name || 'Unassigned'}
+                            {entry.washer?.name ? (
+                              <span className="text-green-700 font-medium">{entry.washer.name}</span>
+                            ) : (
+                              <select
+                                onChange={async (e) => {
+                                  if (!e.target.value) return;
+                                  try {
+                                    const response = await axios.put(
+                                      `${API_BASE_URL}/leads/${id}/wash-history/${entry._id}`,
+                                      { washerId: e.target.value }
+                                    );
+                                    setWashHistory(response.data);
+                                    setRefreshKey(prev => prev + 1);
+                                    showToast('success', 'Washer assigned successfully!');
+                                    fetchWashHistory();
+                                  } catch (err) {
+                                    showToast('error', 'Failed to assign washer');
+                                  }
+                                }}
+                                className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                defaultValue=""
+                              >
+                                <option value="">Assign Washer</option>
+                                {washers.map((washer) => (
+                                  <option key={washer._id} value={washer.id}>
+                                    {washer.name} (ID: {washer.id})
+                                  </option>
+                                ))}
+                              </select>
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             ₹{entry.amount}
@@ -1151,43 +1225,86 @@ const LeadDetails = () => {
                   {(monthlyPackageData.packageType === 'Custom' || !['Basic', 'Premium', 'Deluxe'].includes(monthlyPackageData.packageType)) && monthlyPackageData.customWashes > 3 && (
                     <div className="bg-blue-50 p-4 rounded-lg mb-4">
                       <h4 className="text-sm font-medium text-blue-900 mb-3">Auto-Schedule Generator</h4>
-                      <div className="grid grid-cols-3 gap-3 mb-3">
-                        <div>
-                          <label className="block text-xs text-gray-600 mb-1">Pattern</label>
-                          <select
-                            value={schedulePattern}
-                            onChange={(e) => setSchedulePattern(e.target.value)}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                          >
-                            <option value="weekly">Weekly (7 days)</option>
-                            <option value="biweekly">Bi-weekly (14 days)</option>
-                            <option value="monthly">Monthly (30 days)</option>
-                            <option value="custom">Custom Interval</option>
-                          </select>
-                        </div>
-                        
-                        {schedulePattern === 'custom' && (
+                      <div className="space-y-3 mb-3">
+                        <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="block text-xs text-gray-600 mb-1">Interval (days)</label>
+                            <label className="block text-xs text-gray-600 mb-1">Start Date</label>
                             <input
-                              type="number"
-                              value={customInterval}
-                              onChange={(e) => setCustomInterval(parseInt(e.target.value) || 7)}
-                              min="1" max="365"
+                              type="date"
+                              value={startDate}
+                              onChange={(e) => setStartDate(e.target.value)}
                               className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                              min={new Date().toISOString().split('T')[0]}
                             />
                           </div>
-                        )}
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">End Date (30 Days Max)</label>
+                            <input
+                              type="date"
+                              value={startDate ? new Date(new Date(startDate).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] : ''}
+                              readOnly
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-gray-100 text-gray-600"
+                            />
+                          </div>
+                        </div>
                         
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">Interval (days)</label>
+                            <select
+                              value={customInterval}
+                              onChange={(e) => setCustomInterval(parseInt(e.target.value) || 7)}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                            >
+                              <option value={3}>Every 3 Days</option>
+                              <option value={5}>Every 5 Days</option>
+                              <option value={7}>Every 7 Days</option>
+                              <option value={10}>Every 10 Days</option>
+                              <option value={15}>Every 15 Days</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs text-gray-600 mb-1">Number of Cars</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="10"
+                              value={numberOfCars}
+                              onChange={(e) => {
+                                const count = parseInt(e.target.value) || 1;
+                                setNumberOfCars(count);
+                                const newCarNames = Array(count).fill('').map((_, i) => 
+                                  carNames[i] || (i === 0 ? lead?.carModel || 'THAR' : `CAR${i + 1}`)
+                                );
+                                setCarNames(newCarNames);
+                              }}
+                              className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                              placeholder="1"
+                            />
+                          </div>
+                        </div>
+                        
+                        {/* Car Names Input */}
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1">Start Date</label>
-                          <input
-                            type="date"
-                            value={startDate}
-                            onChange={(e) => setStartDate(e.target.value)}
-                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                            min={new Date().toISOString().split('T')[0]}
-                          />
+                          <label className="block text-xs text-gray-600 mb-2">Car Names (Auto-numbered)</label>
+                          <div className="grid grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                            {Array(numberOfCars).fill('').map((_, index) => (
+                              <div key={index} className="flex items-center space-x-2">
+                                <span className="text-xs text-gray-500 w-12">Car{index + 1}:</span>
+                                <input
+                                  type="text"
+                                  value={carNames[index] || ''}
+                                  onChange={(e) => {
+                                    const newCarNames = [...carNames];
+                                    newCarNames[index] = e.target.value;
+                                    setCarNames(newCarNames);
+                                  }}
+                                  className="flex-1 px-2 py-1 border border-gray-300 rounded text-xs"
+                                  placeholder={index === 0 ? 'THAR' : `CAR${index + 1}`}
+                                />
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                       
@@ -1198,145 +1315,182 @@ const LeadDetails = () => {
                       >
                         Generate {monthlyPackageData.customWashes} Dates
                       </button>
+                      
+
                     </div>
                   )}
                   
-                  {/* Manual Schedule - For Normal Plans or Custom Plans ≤3 washes */}
+                  {/* Wash List - Direct reflection of generated results */}
                   <div className="space-y-3">
+                    <div className="flex justify-between items-center mb-3">
+                      <h5 className="text-sm font-medium text-gray-700">Wash List ({monthlyPackageData.scheduledDates.filter(d => d).length} washes)</h5>
+                      {monthlyPackageData.scheduledDates.some(d => d) && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllDates(!showAllDates)}
+                          className="text-xs text-blue-600 hover:text-blue-800 px-2 py-1 bg-blue-50 rounded"
+                        >
+                          {showAllDates ? 'Collapse' : 'Edit All'}
+                        </button>
+                      )}
+                    </div>
+                    
                     {monthlyPackageData.scheduledDates.map((date, index) => {
                       const washDetail = (monthlyPackageData.washDetails && monthlyPackageData.washDetails[index]) || { serviceType: 'Exterior', time: '09:00' };
                       const usedInteriorCount = monthlyPackageData.washDetails?.filter(w => w && w.serviceType === 'Interior').length || 0;
                       const canSelectInterior = washDetail.serviceType === 'Interior' || usedInteriorCount < (monthlyPackageData.totalInteriorWashes || 0);
                       
                       return (
-                        <div key={index} className={`p-3 border rounded-lg ${washDetail.serviceType === 'Interior' ? 'bg-purple-50 border-purple-200' : 'bg-gray-50'}`}>
-                          <div className="grid grid-cols-3 gap-3 items-center">
-                            <div>
-                              <label className="text-xs text-gray-600">Wash {index + 1}</label>
-                              <input
-                                type="date"
-                                value={date}
-                                onChange={(e) => {
-                                  const newDates = [...monthlyPackageData.scheduledDates];
-                                  newDates[index] = e.target.value;
-                                  setMonthlyPackageData({...monthlyPackageData, scheduledDates: newDates});
-                                }}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                                min={new Date().toISOString().split('T')[0]}
-                              />
+                        <div key={index} className={`p-3 border rounded-lg transition-colors ${
+                          washDetail.serviceType === 'Interior' ? 'bg-purple-50 border-purple-200' : 'bg-gray-50'
+                        } ${date ? 'border-green-300 bg-green-50' : ''}`}>
+                          
+                          {/* Compact View */}
+                          {!showAllDates && date && (
+                            <div className="flex justify-between items-center">
+                              <div className="flex items-center space-x-3">
+                                <span className="font-medium text-gray-700 text-sm">Wash {index + 1}</span>
+                                <span className="text-sm text-gray-600">
+                                  {new Date(date).toLocaleDateString()} • {washDetail.time || '09:00'}
+                                </span>
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  washDetail.serviceType === 'Interior' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {washDetail.serviceType || 'Exterior'}
+                                </span>
+                              </div>
+                              <span className="text-sm font-medium text-green-700">
+                                {washDetail.carNumber || `Car${index + 1}`} - {washDetail.carName || carNames[index % numberOfCars] || 'THAR'}
+                              </span>
                             </div>
-                            <div>
-                              <label className="text-xs text-gray-600">Time</label>
-                              <input
-                                type="time"
-                                value={washDetail.time || '09:00'}
-                                onChange={(e) => {
-                                  const newWashDetails = [...(monthlyPackageData.washDetails || [])];
-                                  newWashDetails[index] = { ...washDetail, time: e.target.value };
-                                  setMonthlyPackageData({...monthlyPackageData, washDetails: newWashDetails});
-                                }}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-xs text-gray-600">Service Type</label>
-                              <select
-                                value={washDetail.serviceType}
-                                onChange={(e) => {
-                                  if (e.target.value === 'Interior' && !canSelectInterior) return;
-                                  const newWashDetails = [...(monthlyPackageData.washDetails || [])];
-                                  newWashDetails[index] = { ...washDetail, serviceType: e.target.value };
-                                  setMonthlyPackageData({...monthlyPackageData, washDetails: newWashDetails});
-                                }}
-                                className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
-                              >
-                                <option value="Exterior">Exterior</option>
-                                <option value="Interior" disabled={!canSelectInterior}>Interior {!canSelectInterior ? '(Limit Reached)' : ''}</option>
-                              </select>
-                            </div>
-                          </div>
+                          )}
+                          
+                          {/* Expanded Edit View */}
+                          {(showAllDates || !date) && (
+                            <>
+                              <div className="grid grid-cols-2 gap-3 mb-2">
+                                <div>
+                                  <label className="text-xs text-gray-600">Wash {index + 1}</label>
+                                  <input
+                                    type="date"
+                                    value={date}
+                                    onChange={(e) => {
+                                      const newDates = [...monthlyPackageData.scheduledDates];
+                                      newDates[index] = e.target.value;
+                                      setMonthlyPackageData({...monthlyPackageData, scheduledDates: newDates});
+                                    }}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                    min={new Date().toISOString().split('T')[0]}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-600">Time</label>
+                                  <input
+                                    type="time"
+                                    value={washDetail.time || '09:00'}
+                                    onChange={(e) => {
+                                      const newWashDetails = [...(monthlyPackageData.washDetails || [])];
+                                      newWashDetails[index] = { ...washDetail, time: e.target.value };
+                                      setMonthlyPackageData({...monthlyPackageData, washDetails: newWashDetails});
+                                    }}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                  />
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <label className="text-xs text-gray-600">Service Type</label>
+                                  <select
+                                    value={washDetail.serviceType}
+                                    onChange={(e) => {
+                                      if (e.target.value === 'Interior' && !canSelectInterior) return;
+                                      const newWashDetails = [...(monthlyPackageData.washDetails || [])];
+                                      newWashDetails[index] = { ...washDetail, serviceType: e.target.value };
+                                      setMonthlyPackageData({...monthlyPackageData, washDetails: newWashDetails});
+                                    }}
+                                    className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                                  >
+                                    <option value="Exterior">Exterior</option>
+                                    <option value="Interior" disabled={!canSelectInterior}>Interior {!canSelectInterior ? '(Limit Reached)' : ''}</option>
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="text-xs text-gray-600">Car Assignment</label>
+                                  <div className="flex items-center space-x-2">
+                                    <input
+                                      type="text"
+                                      value={washDetail.carNumber || `Car${index + 1}`}
+                                      readOnly
+                                      className="w-16 px-2 py-1 border border-gray-300 rounded text-sm bg-gray-100 text-xs"
+                                    />
+                                    <span className="text-xs text-gray-500">-</span>
+                                    <input
+                                      type="text"
+                                      value={washDetail.carName || carNames[index % numberOfCars] || 'THAR'}
+                                      onChange={(e) => {
+                                        const newWashDetails = [...(monthlyPackageData.washDetails || [])];
+                                        newWashDetails[index] = { ...washDetail, carName: e.target.value };
+                                        setMonthlyPackageData({...monthlyPackageData, washDetails: newWashDetails});
+                                      }}
+                                      className="flex-1 px-2 py-1 border border-gray-300 rounded text-sm"
+                                      placeholder="Car name"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                   
-                  {/* Auto-Generated Preview - Only show for custom plans with auto-generation */}
-                  {(monthlyPackageData.packageType === 'Custom' || !['Basic', 'Premium', 'Deluxe'].includes(monthlyPackageData.packageType)) && monthlyPackageData.customWashes > 3 && monthlyPackageData.scheduledDates.some(d => d) && (
-                    <div className="mt-4 p-3 bg-green-50 rounded-lg">
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-sm font-medium text-green-800">
-                          Generated: {monthlyPackageData.scheduledDates.filter(d => d).length} dates
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setShowAllDates(!showAllDates)}
-                          className="text-xs text-green-600 hover:text-green-800"
-                        >
-                          {showAllDates ? 'Show Less' : 'Edit All'}
-                        </button>
-                      </div>
-                      
-                      {showAllDates && (
-                        <div className="max-h-40 overflow-y-auto space-y-1">
-                          {monthlyPackageData.scheduledDates.map((date, index) => (
-                            <div key={index} className="flex items-center justify-between py-1 text-sm">
-                              <span>Wash {index + 1}:</span>
-                              <input
-                                type="date"
-                                value={date}
-                                onChange={(e) => {
-                                  const newDates = [...monthlyPackageData.scheduledDates];
-                                  newDates[index] = e.target.value;
-                                  setMonthlyPackageData({...monthlyPackageData, scheduledDates: newDates});
-                                }}
-                                className="px-2 py-1 border border-gray-300 rounded text-xs"
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+
                 </div>
                 
-                {/* Payment and Completion Status */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Payment Status</label>
-                    <div className="flex space-x-4">
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          checked={!monthlyPackageData.paymentStatus}
-                          onChange={() => setMonthlyPackageData({...monthlyPackageData, paymentStatus: false})}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">Not Paid</span>
-                      </label>
-                      <label className="flex items-center">
-                        <input
-                          type="radio"
-                          checked={monthlyPackageData.paymentStatus}
-                          onChange={() => setMonthlyPackageData({...monthlyPackageData, paymentStatus: true})}
-                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-                        />
-                        <span className="ml-2 text-sm text-gray-700">Paid</span>
-                      </label>
+                {/* Admin Controls */}
+                {monthlyPackageData.scheduledDates.some(d => d) && (
+                  <div className="mt-4 p-3 bg-gray-50 rounded-lg border">
+                    <h5 className="text-sm font-medium text-gray-700 mb-3">Admin Controls</h5>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Payment Status</label>
+                        <div className="flex space-x-4">
+                          <label className="flex items-center">
+                            <input
+                              type="radio"
+                              checked={!monthlyPackageData.paymentStatus}
+                              onChange={() => setMonthlyPackageData({...monthlyPackageData, paymentStatus: false})}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Not Paid</span>
+                          </label>
+                          <label className="flex items-center">
+                            <input
+                              type="radio"
+                              checked={monthlyPackageData.paymentStatus}
+                              onChange={() => setMonthlyPackageData({...monthlyPackageData, paymentStatus: true})}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                            />
+                            <span className="ml-2 text-sm text-gray-700">Paid</span>
+                          </label>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Completion Status</label>
+                        <select
+                          value={monthlyPackageData.completionStatus}
+                          onChange={(e) => setMonthlyPackageData({...monthlyPackageData, completionStatus: e.target.value})}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="scheduled">Scheduled</option>
+                          <option value="completed">Completed</option>
+                          <option value="cancelled">Cancelled</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Completion Status</label>
-                    <select
-                      value={monthlyPackageData.completionStatus}
-                      onChange={(e) => setMonthlyPackageData({...monthlyPackageData, completionStatus: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="scheduled">Scheduled</option>
-                      <option value="completed">Completed</option>
-                      <option value="missed">Missed</option>
-                    </select>
-                  </div>
-                </div>
+                )}
               </div>
             )}
 
@@ -1510,6 +1664,8 @@ const LeadDetails = () => {
                     setCustomInterval(7);
                     setStartDate(new Date().toISOString().split('T')[0]);
                     setShowAllDates(false);
+                    setNumberOfCars(1);
+                    setCarNames([lead?.carModel || 'THAR']);
                   } catch (err: any) {
                     console.error('Error creating package:', err);
                     const errorMessage = err.response?.data?.message || err.message || 'Failed to create package';

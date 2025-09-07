@@ -131,7 +131,7 @@ const MonthlyCustomerDebug: React.FC = () => {
           <div className="mt-6">
             <h4 className="font-medium mb-2">Detailed Results:</h4>
             <pre className="bg-gray-100 p-4 rounded text-xs overflow-auto max-h-96">
-              {JSON.stringify(debugData, null, 2)}
+              {/* {JSON.stringify(debugData, null, 2)} */}
             </pre>
           </div>
         </div>

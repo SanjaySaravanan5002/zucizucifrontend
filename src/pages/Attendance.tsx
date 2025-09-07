@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Calendar, User, Filter, RefreshCw, Activity, UserCheck, UserX, Grid, List } from 'lucide-react';
+import { Clock, Calendar, User, Filter, RefreshCw, Activity, UserCheck, UserX, Grid, List, Download } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
 import AttendanceCard from '../components/AttendanceCard';
@@ -68,7 +68,7 @@ const Attendance = () => {
         return;
       }
       
-      const response = await axios.get('https://zuci-sbackend.onrender.com/api/dashboard/washer-attendance', {
+      const response = await axios.get('https://zuci-sbackend-6.onrender.com/api/dashboard/washer-attendance', {
         params: dateFilter,
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -115,6 +115,57 @@ const Attendance = () => {
   const completedWashers = attendanceData.filter(w => w.currentStatus === 'completed').length;
   const absentWashers = attendanceData.filter(w => w.currentStatus === 'absent').length;
 
+  const downloadCSV = () => {
+    if (attendanceData.length === 0) {
+      alert('No attendance data to download');
+      return;
+    }
+
+    // Create CSV content
+    let csvContent = 'Washer ID,Washer Name,Phone,Date,Time In,Time Out,Duration (Hours),Status\n';
+    
+    attendanceData.forEach(washer => {
+      if (washer.recentAttendance && washer.recentAttendance.length > 0) {
+        washer.recentAttendance.forEach(attendance => {
+          const timeIn = attendance.timeIn ? new Date(attendance.timeIn).toLocaleTimeString('en-US', { hour12: false }) : 'N/A';
+          const timeOut = attendance.timeOut ? new Date(attendance.timeOut).toLocaleTimeString('en-US', { hour12: false }) : 'N/A';
+          
+          // Calculate duration from timeIn and timeOut if both exist
+          let duration = '0.00';
+          if (attendance.timeIn && attendance.timeOut) {
+            const timeInDate = new Date(attendance.timeIn);
+            const timeOutDate = new Date(attendance.timeOut);
+            const durationMs = timeOutDate.getTime() - timeInDate.getTime();
+            const durationHours = durationMs / (1000 * 60 * 60); // Convert to hours
+            duration = durationHours > 0 ? durationHours.toFixed(2) : '0.00';
+          } else if (attendance.duration) {
+            // Fallback to stored duration (assume it's in hours if > 24, otherwise minutes)
+            const durationValue = attendance.duration;
+            duration = durationValue > 24 ? (durationValue / 60).toFixed(2) : durationValue.toFixed(2);
+          }
+          
+          const date = new Date(attendance.date).toLocaleDateString();
+          
+          csvContent += `${washer.id},${washer.name},${washer.phone},${date},${timeIn},${timeOut},${duration},${attendance.status}\n`;
+        });
+      } else {
+        // If no attendance records, add a row with basic info
+        csvContent += `${washer.id},${washer.name},${washer.phone},No Records,N/A,N/A,0.00,absent\n`;
+      }
+    });
+
+    // Download CSV
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `attendance-report-${dateFilter.startDate}-to-${dateFilter.endDate}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   if (loading && attendanceData.length === 0) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -158,6 +209,31 @@ const Attendance = () => {
                 <List className="h-4 w-4" />
               </button>
             </div>
+            <button
+              onClick={downloadCSV}
+              disabled={attendanceData.length === 0}
+              className="flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </button>
+            <button
+              onClick={async () => {
+                try {
+                  const token = localStorage.getItem('auth_token');
+                  await axios.post('https://zuci-sbackend-6.onrender.com/api/dashboard/clear-sample-attendance', {}, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  });
+                  fetchAttendanceData();
+                } catch (error) {
+                  console.error('Error clearing sample data:', error);
+                }
+              }}
+              className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+            >
+              Clear Fake Data
+            </button>
+
             <button
               onClick={fetchAttendanceData}
               disabled={loading}

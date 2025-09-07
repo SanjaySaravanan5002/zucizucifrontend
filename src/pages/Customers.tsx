@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Filter, Search, Phone, Car, MapPin, 
-  User, ArrowUpDown 
+  User, ArrowUpDown, Edit 
 } from 'lucide-react';
 import TypeBadge from '../components/common/TypeBadge';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
@@ -42,7 +42,7 @@ interface Customer {
   };
 }
 
-const API_BASE_URL = 'https://zuci-sbackend.onrender.com/api';
+const API_BASE_URL = 'https://zuci-sbackend-2.onrender.com/api';
 
 // API functions
 const getAuthHeaders = () => {
@@ -79,9 +79,11 @@ const api = {
 
 const Customers = () => {
   const navigate = useNavigate();
+  const [allCustomers, setAllCustomers] = useState<Customer[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
   const [stats, setStats] = useState<any>(null);
   const [page, setPage] = useState(1);
@@ -94,6 +96,8 @@ const Customers = () => {
       end: ''
     }
   });
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
 
   const fetchData = async () => {
     try {
@@ -106,7 +110,7 @@ const Customers = () => {
       }
       
       const [customersData, statsData] = await Promise.all([
-        api.getCustomers({ ...filters, searchQuery: searchQuery, page }).catch(err => {
+        api.getCustomers({ ...filters }).catch(err => {
           console.warn('Failed to fetch customers:', err);
           return { customers: [], total: 0 };
         }),
@@ -116,8 +120,8 @@ const Customers = () => {
         })
       ]);
       
-      setCustomers(Array.isArray(customersData.customers) ? customersData.customers : Array.isArray(customersData) ? customersData : []);
-      setTotalPages(Math.ceil((customersData.total || customersData.length || 0) / 10));
+      const customersList = Array.isArray(customersData.customers) ? customersData.customers : Array.isArray(customersData) ? customersData : [];
+      setAllCustomers(customersList);
       setStats(statsData);
     } catch (error: any) {
       console.error('Error fetching customers:', error);
@@ -126,18 +130,50 @@ const Customers = () => {
       } else {
         toast.error('Failed to fetch customers');
       }
-      setCustomers([]);
+      setAllCustomers([]);
       setStats({ totalCustomers: 0, totalWashes: 0, activeAreas: 0, monthlyCustomers: 0, monthlyPercentage: '0.0' });
     } finally {
       setLoading(false);
     }
   };
 
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Client-side filtering and search
+  useEffect(() => {
+    let filtered = [...allCustomers];
+
+    // Apply search filter
+    if (debouncedSearchQuery.trim()) {
+      const query = debouncedSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter(customer => 
+        customer.customerName.toLowerCase().includes(query) ||
+        customer.phone.toLowerCase().includes(query) ||
+        customer.area.toLowerCase().includes(query) ||
+        customer.carModel.toLowerCase().includes(query) ||
+        customer.leadSource.toLowerCase().includes(query) ||
+        `CUS${String(customer.id).padStart(4, '0')}`.toLowerCase().includes(query)
+      );
+    }
+
+    setCustomers(filtered);
+    setTotalPages(Math.ceil(filtered.length / 10));
+    setPage(1); // Reset to first page when filtering
+  }, [debouncedSearchQuery, allCustomers]);
+
   const handleUpdateCustomer = async (id: number, updates: any) => {
     try {
       await api.updateCustomer(id, updates);
       toast.success('Customer updated successfully');
       fetchData();
+      setShowEditModal(false);
+      setEditCustomer(null);
     } catch (error: any) {
       toast.error('Failed to update customer');
     }
@@ -156,7 +192,10 @@ const Customers = () => {
 
   useEffect(() => {
     fetchData();
-  }, [filters, searchQuery, page]);
+  }, [filters]);
+
+  // Get paginated customers for display
+  const paginatedCustomers = customers.slice((page - 1) * 10, page * 10);
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -357,8 +396,8 @@ const Customers = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {customers.length > 0 ? (
-                customers.map((customer, index) => (
+              {paginatedCustomers.length > 0 ? (
+                paginatedCustomers.map((customer, index) => (
                   <tr key={customer.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
@@ -452,30 +491,28 @@ const Customers = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
                       <button
+                        onClick={() => {
+                          setEditCustomer(customer);
+                          setShowEditModal(true);
+                        }}
+                        className="text-gray-600 hover:text-gray-900"
+                        title="Edit Customer"
+                      >
+                        <Edit className="h-4 w-4" />
+                      </button>
+                      <button
                         onClick={() => navigate(`/user/${customer.id}`)}
                         className="text-blue-600 hover:text-blue-900"
                       >
                         View
                       </button>
-                      {/* <button
-                        onClick={() => handleUpdateCustomer(customer.id, { status: 'Active' })}
-                        className="text-green-600 hover:text-green-900"
-                      >
-                        Update
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCustomer(customer.id)}
-                        className="text-red-600 hover:text-red-900"
-                      >
-                        Delete
-                      </button> */}
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
-                    No customers found
+                  <td colSpan={9} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-center">
+                    {debouncedSearchQuery ? 'No customers found matching your search' : 'No customers found'}
                   </td>
                 </tr>
               )}
@@ -533,6 +570,147 @@ const Customers = () => {
           </div>
         </div>
       </div>
+
+      {/* Edit Customer Modal */}
+      {showEditModal && editCustomer && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Edit Customer - {editCustomer.customerName}
+            </h3>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleUpdateCustomer(editCustomer.id, {
+                name: editCustomer.customerName,
+                phone: editCustomer.phone,
+                area: editCustomer.area,
+                carModel: editCustomer.carModel,
+                leadType: editCustomer.leadType,
+                leadSource: editCustomer.leadSource,
+                notes: editCustomer.notes
+              });
+            }}>
+              <div className="grid grid-cols-1 gap-y-4 gap-x-4 sm:grid-cols-2">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Customer Name
+                  </label>
+                  <input
+                    type="text"
+                    value={editCustomer.customerName}
+                    onChange={(e) => setEditCustomer({...editCustomer, customerName: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Phone Number
+                  </label>
+                  <input
+                    type="text"
+                    value={editCustomer.phone}
+                    onChange={(e) => setEditCustomer({...editCustomer, phone: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Area
+                  </label>
+                  <input
+                    type="text"
+                    value={editCustomer.area}
+                    onChange={(e) => setEditCustomer({...editCustomer, area: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Car Model
+                  </label>
+                  <input
+                    type="text"
+                    value={editCustomer.carModel}
+                    onChange={(e) => setEditCustomer({...editCustomer, carModel: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Lead Type
+                  </label>
+                  <select
+                    value={editCustomer.leadType}
+                    onChange={(e) => setEditCustomer({...editCustomer, leadType: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                  >
+                    <option value="One-time">One-time</option>
+                    <option value="Monthly">Monthly</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Lead Source
+                  </label>
+                  <select
+                    value={editCustomer.leadSource}
+                    onChange={(e) => setEditCustomer({...editCustomer, leadSource: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                  >
+                    <option value="Pamphlet">Pamphlet</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="Referral">Referral</option>
+                    <option value="Walk-in">Walk-in</option>
+                    <option value="Social Media">Social Media</option>
+                    <option value="Website">Website</option>
+                  </select>
+                </div>
+                
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={editCustomer.notes || ''}
+                    onChange={(e) => setEditCustomer({...editCustomer, notes: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditCustomer(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Update Customer
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

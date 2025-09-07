@@ -1,5 +1,5 @@
 // Centralized API service for handling authenticated requests
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-sbackend.onrender.com/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-sbackend-6.onrender.com/api';
 
 interface ApiResponse<T = any> {
   success: boolean;

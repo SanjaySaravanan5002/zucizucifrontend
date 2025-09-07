@@ -7,6 +7,7 @@ import {
 import TypeBadge from '../components/common/TypeBadge';
 import StatusBadge from '../components/common/StatusBadge';
 import GPSMapPicker from '../components/GPSMapPicker';
+import AddWashEntry from '../components/AddWashEntry';
 import { useToast } from '../contexts/ToastContext';
 
 import axios from 'axios';
@@ -25,7 +26,7 @@ interface Lead {
   notes: string;
 }
 
-const API_BASE_URL = 'https://zuci-sbackend.onrender.com/api';
+const API_BASE_URL = 'https://zuci-sbackend-2.onrender.com/api';
 
 // API functions with authentication
 const getAuthHeaders = () => {
@@ -72,6 +73,7 @@ const Leads = () => {
   const { showToast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterOpen, setFilterOpen] = useState(false);
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [addLeadOpen, setAddLeadOpen] = useState(false);
   const [locationTab, setLocationTab] = useState<'current'>('current');
   const [filters, setFilters] = useState({
@@ -216,13 +218,17 @@ const Leads = () => {
   });
   const [showEditModal, setShowEditModal] = useState(false);
   const [editLead, setEditLead] = useState<Lead | null>(null);
+  const [showAddWashEntry, setShowAddWashEntry] = useState(false);
+
+  // Store all leads for client-side filtering
+  const [allLeads, setAllLeads] = useState<Lead[]>([]);
+  const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
 
   // Fetch leads
   const fetchLeads = useCallback(async () => {
     try {
       setLoading(true);
       const queryParams = {
-        searchQuery,
         leadType: filters.leadType,
         leadSource: filters.leadSource,
         status: filters.status,
@@ -232,14 +238,40 @@ const Leads = () => {
       const data = await api.getLeads(queryParams);
       // Filter out converted leads from the frontend display
       const filteredData = data.filter(lead => lead.status !== 'Converted');
-      setLeads(filteredData);
+      setAllLeads(filteredData);
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch leads');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [filters.leadType, filters.leadSource, filters.status, filters.dateRange.start, filters.dateRange.end]);
+
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Client-side search filtering
+  useEffect(() => {
+    if (!debouncedSearchQuery.trim()) {
+      setFilteredLeads(allLeads);
+      return;
+    }
+
+    const query = debouncedSearchQuery.toLowerCase().trim();
+    const filtered = allLeads.filter(lead => 
+      lead.customerName.toLowerCase().includes(query) ||
+      lead.phone.toLowerCase().includes(query) ||
+      lead.area.toLowerCase().includes(query) ||
+      lead.carModel.toLowerCase().includes(query) ||
+      lead.leadSource.toLowerCase().includes(query)
+    );
+    setFilteredLeads(filtered);
+  }, [debouncedSearchQuery, allLeads]);
 
   // Fetch stats
   const fetchStats = useCallback(async () => {
@@ -263,19 +295,19 @@ const Leads = () => {
     }
   }, []);
 
-  // Load data on mount only
+  // Load data on mount and when filters change
   useEffect(() => {
     fetchLeads();
-    fetchWashers();
-  }, []);
+  }, [fetchLeads]);
 
-  // Manual refresh when filters change
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      fetchLeads();
-    }, 500);
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, filters.leadType, filters.leadSource, filters.status, filters.dateRange.start, filters.dateRange.end]);
+    fetchWashers();
+  }, [fetchWashers]);
+
+  // Update leads state for display
+  useEffect(() => {
+    setLeads(filteredLeads);
+  }, [filteredLeads]);
 
   useEffect(() => {
     fetchStats();
@@ -659,11 +691,19 @@ const Leads = () => {
               Efficiently manage leads, track conversions, and assign washers to optimize your business workflow.
             </p>
           </div>
-          <div className="mt-4 sm:mt-0">
+          <div className="mt-4 sm:mt-0 flex space-x-3">
+            <button
+              type="button"
+              onClick={() => setShowAddWashEntry(true)}
+              className="btn-primary btn-liquid animate-pulse-glow"
+            >
+              <Plus className="-ml-1 mr-2 h-5 w-5" />
+              Add Wash Entry
+            </button>
             <button
               type="button"
               onClick={handleAddLeadToggle}
-              className="btn-primary btn-liquid animate-pulse-glow"
+              className="btn-secondary btn-liquid"
             >
               <Plus className="-ml-1 mr-2 h-5 w-5" />
               Add New Lead
@@ -1595,6 +1635,16 @@ const Leads = () => {
           </div>
         </div>
       )}
+
+      {/* Add Wash Entry Modal */}
+      <AddWashEntry
+        isOpen={showAddWashEntry}
+        onClose={() => setShowAddWashEntry(false)}
+        onSuccess={() => {
+          fetchLeads();
+          fetchStats();
+        }}
+      />
     </div>
   );
 };

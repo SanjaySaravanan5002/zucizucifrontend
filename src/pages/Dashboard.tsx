@@ -742,9 +742,9 @@ const Dashboard = () => {
       </div>
 
       {/* Debug Panel for Monthly Customers */}
-      {user?.role === 'superadmin' && (
+      {/* {user?.role === 'superadmin' && (
         <MonthlyCustomerDebug />
-      )}
+      )} */}
 
       {/* Recent leads section */}
       <div className="glass-card floating-card animate-fade-in-up overflow-hidden mt-8">

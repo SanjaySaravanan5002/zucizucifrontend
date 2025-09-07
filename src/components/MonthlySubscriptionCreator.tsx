@@ -34,18 +34,20 @@ const MonthlySubscriptionCreator: React.FC<Props> = ({
     
     const dates = [];
     const start = new Date(startDate);
-    let interval = 7;
+    const endDate = new Date(start);
+    endDate.setDate(start.getDate() + 30); // Exactly 30 days from start
     
-    switch (schedulePattern) {
-      case 'weekly': interval = 7; break;
-      case 'biweekly': interval = 14; break;
-      case 'monthly': interval = 30; break;
-      case 'custom': interval = customInterval || 7; break;
-    }
+    const totalDays = 30; // Fixed 30-day period
+    const interval = Math.max(1, Math.floor(totalDays / totalWashes));
     
     for (let i = 0; i < totalWashes; i++) {
       const date = new Date(start);
-      date.setDate(start.getDate() + (i * interval));
+      const daysToAdd = i * interval;
+      
+      // Stop if we would exceed 30 days
+      if (daysToAdd > 30) break;
+      
+      date.setDate(start.getDate() + daysToAdd);
       dates.push(date.toISOString().split('T')[0]);
     }
     
@@ -96,10 +98,7 @@ const MonthlySubscriptionCreator: React.FC<Props> = ({
               onChange={(e) => setSchedulePattern(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="weekly">Weekly (Every 7 days)</option>
-              <option value="biweekly">Bi-weekly (Every 14 days)</option>
-              <option value="monthly">Monthly (Every 30 days)</option>
-              <option value="custom">Custom Interval</option>
+              <option value="auto">Auto-distribute within 30 days</option>
             </select>
           </div>
 
@@ -212,7 +211,7 @@ const MonthlySubscriptionCreator: React.FC<Props> = ({
             onClick={handleSubmit}
             className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
           >
-            Create Subscription ({totalWashes} washes)
+            Create Subscription ({generatedDates.length} washes)
           </button>
         </div>
       </div>
