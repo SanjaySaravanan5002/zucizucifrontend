@@ -81,24 +81,108 @@ const Revenue = () => {
   const washTypes = ['Premium', 'Deluxe', 'Standard'];
   const customerTypes = ['Monthly', 'One-time'];
   
+  // Memoize filtered stats for summary view
+  const filteredStats = useMemo(() => {
+    if (!stats) return null;
+    
+    // If no filters applied, return original stats
+    if (!filters.washType && !filters.customerType) {
+      return stats;
+    }
+    
+    // Filter transactions based on applied filters
+    const filteredTransactionsList = stats.recentTransactions.filter(transaction => {
+      if (filters.washType && !transaction.washType.toLowerCase().includes(filters.washType.toLowerCase())) {
+        return false;
+      }
+      if (filters.customerType && transaction.customerType !== filters.customerType) {
+        return false;
+      }
+      return true;
+    });
+    
+    // Recalculate stats based on filtered transactions
+    const filteredTotalRevenue = filteredTransactionsList.reduce((sum, t) => sum + t.amount, 0);
+    const filteredTotalWashes = filteredTransactionsList.length;
+    const filteredTotalCustomers = new Set(filteredTransactionsList.map(t => t.customerId)).size;
+    
+    // Recalculate revenue by wash type
+    const filteredRevenueByWashType: Record<string, number> = {};
+    const filteredWashesByType: Record<string, number> = {};
+    filteredTransactionsList.forEach(t => {
+      filteredRevenueByWashType[t.washType] = (filteredRevenueByWashType[t.washType] || 0) + t.amount;
+      filteredWashesByType[t.washType] = (filteredWashesByType[t.washType] || 0) + 1;
+    });
+    
+    // Recalculate revenue by customer type
+    const filteredRevenueByCustomerType: Record<string, number> = {};
+    const filteredCustomersByType: Record<string, number> = {};
+    const customerTypeMap = new Map();
+    filteredTransactionsList.forEach(t => {
+      filteredRevenueByCustomerType[t.customerType] = (filteredRevenueByCustomerType[t.customerType] || 0) + t.amount;
+      if (!customerTypeMap.has(t.customerId)) {
+        customerTypeMap.set(t.customerId, t.customerType);
+        filteredCustomersByType[t.customerType] = (filteredCustomersByType[t.customerType] || 0) + 1;
+      }
+    });
+    
+    // Recalculate payment summary
+    const paidTransactions = filteredTransactionsList.filter(t => t.isPaid);
+    const unpaidTransactions = filteredTransactionsList.filter(t => !t.isPaid);
+    const filteredPaymentSummary = {
+      total: filteredTotalRevenue,
+      paid: paidTransactions.reduce((sum, t) => sum + t.amount, 0),
+      unpaid: unpaidTransactions.reduce((sum, t) => sum + t.amount, 0)
+    };
+    
+    return {
+      ...stats,
+      totalRevenue: filteredTotalRevenue,
+      netRevenue: filteredTotalRevenue - (stats.totalExpenses || 0),
+      totalWashes: filteredTotalWashes,
+      totalCustomers: filteredTotalCustomers,
+      revenueByWashType: filteredRevenueByWashType,
+      washesByType: filteredWashesByType,
+      revenueByCustomerType: filteredRevenueByCustomerType,
+      customersByType: filteredCustomersByType,
+      paymentSummary: filteredPaymentSummary,
+      recentTransactions: filteredTransactionsList
+    };
+  }, [stats, filters.washType, filters.customerType]);
+  
   // Memoize filtered and sorted transactions to avoid recalculation on every render
   const filteredTransactions = useMemo(() => {
     if (!stats?.recentTransactions) return [];
     
     return [...stats.recentTransactions]
       .filter(transaction => {
-        if (!searchTerm) return true;
-        const searchLower = searchTerm.toLowerCase();
-        return (
-          transaction.customerName.toLowerCase().includes(searchLower) ||
-          transaction.area.toLowerCase().includes(searchLower) ||
-          transaction.washType.toLowerCase().includes(searchLower) ||
-          (transaction.washerName && transaction.washerName.toLowerCase().includes(searchLower)) ||
-          transaction.customerType.toLowerCase().includes(searchLower) ||
-          formatCurrency(transaction.amount).includes(searchLower) ||
-          (transaction.isPaid ? 'paid' : 'unpaid').includes(searchLower) ||
-          new Date(transaction.date).toLocaleDateString().toLowerCase().includes(searchLower)
-        );
+        // Apply search filter
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          const matchesSearch = (
+            transaction.customerName.toLowerCase().includes(searchLower) ||
+            transaction.area.toLowerCase().includes(searchLower) ||
+            transaction.washType.toLowerCase().includes(searchLower) ||
+            (transaction.washerName && transaction.washerName.toLowerCase().includes(searchLower)) ||
+            transaction.customerType.toLowerCase().includes(searchLower) ||
+            formatCurrency(transaction.amount).includes(searchLower) ||
+            (transaction.isPaid ? 'paid' : 'unpaid').includes(searchLower) ||
+            new Date(transaction.date).toLocaleDateString().toLowerCase().includes(searchLower)
+          );
+          if (!matchesSearch) return false;
+        }
+        
+        // Apply wash type filter
+        if (filters.washType && !transaction.washType.toLowerCase().includes(filters.washType.toLowerCase())) {
+          return false;
+        }
+        
+        // Apply customer type filter
+        if (filters.customerType && transaction.customerType !== filters.customerType) {
+          return false;
+        }
+        
+        return true;
       })
       .sort((a, b) => {
         // Handle sorting based on the selected field and direction
@@ -121,7 +205,7 @@ const Revenue = () => {
             : valueB.localeCompare(valueA);
         }
       });
-  }, [stats, searchTerm, sortField, sortDirection]);
+  }, [stats, searchTerm, sortField, sortDirection, filters.washType, filters.customerType]);
 
   const totalPages = useMemo(() => Math.ceil(filteredTransactions.length / transactionsPerPage), [filteredTransactions.length, transactionsPerPage]);
 
@@ -155,6 +239,8 @@ const Revenue = () => {
       if (filtersToUse.customerType) params.customerType = filtersToUse.customerType;
 
       console.log('Fetching with params:', params);
+      console.log('Customer type filter value:', filtersToUse.customerType);
+      console.log('Full API URL will be:', `/reports/revenue_and_income?${new URLSearchParams(params).toString()}`);
       const token = localStorage.getItem('auth_token');
       
       const response = await api.get('/reports/revenue_and_income', { 
@@ -166,6 +252,8 @@ const Revenue = () => {
       });
       
       console.log('Revenue API Response:', response.data);
+      console.log('Response contains customer type breakdown:', !!response.data.revenueByCustomerType);
+      console.log('Customer type breakdown data:', response.data.revenueByCustomerType);
       setStats(response.data);
       setError(null);
     } catch (error: any) {
@@ -241,7 +329,8 @@ const Revenue = () => {
   const handleExport = () => {
     if (!stats) return;
 
-    const timestamp = filters.startDate || 'all-time';
+    const timestamp = `${filters.startDate || 'all-time'}-to-${filters.endDate || 'current'}`;
+    const formattedTimestamp = new Date().toLocaleDateString('en-GB');
 
     if (view === 'summary') {
       generateRevenueSummaryExcel(stats, timestamp);
@@ -251,29 +340,75 @@ const Revenue = () => {
   };
 
   const generateRevenueSummaryExcel = (data: RevenueStats, timestamp: string) => {
+    // Use filtered stats for Excel export
+    const exportData = filteredStats || data;
     const title = `Revenue Summary Report - ${timestamp}`;
     const headers = ['Metric', 'Value', 'Details'];
     
     const summaryData = [
-      ['Gross Revenue', data.totalRevenue, `From ${data.totalCustomers} customers`],
-      ['Net Revenue', data.netRevenue, `After expenses: ${formatCurrency(data.totalExpenses || 0)}`],
-      ['Total Washes', data.totalWashes, 'Completed washes'],
-      ['Avg Revenue/Customer', data.totalCustomers ? data.totalRevenue / data.totalCustomers : 0, 'Per customer average'],
-      ['Avg Revenue/Wash', data.totalWashes ? data.totalRevenue / data.totalWashes : 0, 'Per wash average']
+      ['Gross Revenue', exportData.totalRevenue, `From ${exportData.totalCustomers} customers`],
+      ['Net Revenue', exportData.netRevenue, `After expenses: ${formatCurrency(exportData.totalExpenses || 0)}`],
+      ['Total Washes', exportData.totalWashes, 'Completed washes'],
+      ['Avg Revenue/Customer', exportData.totalCustomers ? exportData.totalRevenue / exportData.totalCustomers : 0, 'Per customer average'],
+      ['Avg Revenue/Wash', exportData.totalWashes ? exportData.totalRevenue / exportData.totalWashes : 0, 'Per wash average']
     ];
     
+    // Calculate customer type breakdown
+    const oneTimeRevenue = Object.entries(exportData.revenueByCustomerType || {}).find(([type]) => type === 'One-time')?.[1] || 0;
+    const monthlyRevenue = Object.entries(exportData.revenueByCustomerType || {}).find(([type]) => type === 'Monthly')?.[1] || 0;
+    const oneTimeCustomers = exportData.customersByType?.['One-time'] || 0;
+    const monthlyCustomers = exportData.customersByType?.['Monthly'] || 0;
+    
     const analyticsData = [
-      { label: 'Payment Success Rate', value: data.paymentSummary?.total ? `${Math.round((data.paymentSummary.paid / data.paymentSummary.total) * 100)}%` : '0%' },
-      { label: 'Outstanding Amount', value: data.paymentSummary?.unpaid || 0 },
-      { label: 'Profit Margin', value: data.totalRevenue ? `${Math.round((data.netRevenue / data.totalRevenue) * 100)}%` : '0%' },
-      { label: 'Total Revenue', value: data.paymentSummary?.total || 0 },
-      { label: 'Paid Amount', value: data.paymentSummary?.paid || 0 },
-      { label: 'Unpaid Amount', value: data.paymentSummary?.unpaid || 0 }
+      { label: 'Report Period', value: `${filters.startDate || 'All time'} to ${filters.endDate || 'Current'}` },
+      { label: 'Applied Filters', value: `Wash Type: ${filters.washType || 'All'}, Customer Type: ${filters.customerType || 'All'}` },
+      { label: '═══ CUSTOMER TYPE BREAKDOWN ═══', value: '' },
+      { label: 'One-time Customer Revenue', value: oneTimeRevenue },
+      { label: 'One-time Customer Count', value: oneTimeCustomers },
+      { label: 'One-time Avg Revenue/Customer', value: oneTimeCustomers > 0 ? Math.round(oneTimeRevenue / oneTimeCustomers) : 0 },
+      { label: 'Monthly Customer Revenue', value: monthlyRevenue },
+      { label: 'Monthly Customer Count', value: monthlyCustomers },
+      { label: 'Monthly Avg Revenue/Customer', value: monthlyCustomers > 0 ? Math.round(monthlyRevenue / monthlyCustomers) : 0 },
+      { label: '═══ PAYMENT ANALYTICS ═══', value: '' },
+      { label: 'Payment Success Rate', value: exportData.paymentSummary?.total ? `${Math.round((exportData.paymentSummary.paid / exportData.paymentSummary.total) * 100)}%` : '0%' },
+      { label: 'Outstanding Amount', value: exportData.paymentSummary?.unpaid || 0 },
+      { label: 'Profit Margin', value: exportData.totalRevenue ? `${Math.round((exportData.netRevenue / exportData.totalRevenue) * 100)}%` : '0%' },
+      { label: 'Total Revenue', value: exportData.paymentSummary?.total || 0 },
+      { label: 'Paid Amount', value: exportData.paymentSummary?.paid || 0 },
+      { label: 'Unpaid Amount', value: exportData.paymentSummary?.unpaid || 0 }
     ];
     
     const { wb, ws } = createStyledWorkbook(title, headers, summaryData, analyticsData);
     
     XLSX.utils.book_append_sheet(wb, ws, 'Revenue Summary');
+    
+    // Add customer type breakdown sheet if we have both types
+    if (oneTimeRevenue > 0 && monthlyRevenue > 0) {
+      const breakdownHeaders = ['Customer Type', 'Revenue (₹)', 'Customer Count', 'Avg Revenue/Customer (₹)', 'Revenue Share (%)'];
+      const breakdownData = [
+        ['One-time', oneTimeRevenue, oneTimeCustomers, oneTimeCustomers > 0 ? Math.round(oneTimeRevenue / oneTimeCustomers) : 0, exportData.totalRevenue > 0 ? Math.round((oneTimeRevenue / exportData.totalRevenue) * 100) : 0],
+        ['Monthly', monthlyRevenue, monthlyCustomers, monthlyCustomers > 0 ? Math.round(monthlyRevenue / monthlyCustomers) : 0, exportData.totalRevenue > 0 ? Math.round((monthlyRevenue / exportData.totalRevenue) * 100) : 0]
+      ];
+      
+      const breakdownAnalytics = [
+        { label: 'Customer Type Analysis', value: 'Detailed breakdown by subscription type' },
+        { label: 'Dominant Customer Type', value: oneTimeRevenue > monthlyRevenue ? 'One-time' : 'Monthly' },
+        { label: 'Revenue Ratio (Monthly:One-time)', value: oneTimeRevenue > 0 ? `1:${Math.round(oneTimeRevenue / monthlyRevenue * 10) / 10}` : 'All Monthly' },
+        { label: 'Customer Ratio (Monthly:One-time)', value: oneTimeCustomers > 0 ? `1:${Math.round(oneTimeCustomers / monthlyCustomers * 10) / 10}` : 'All Monthly' },
+        { label: 'Monthly Customer Value', value: monthlyCustomers > 0 ? Math.round(monthlyRevenue / monthlyCustomers) : 0 },
+        { label: 'One-time Customer Value', value: oneTimeCustomers > 0 ? Math.round(oneTimeRevenue / oneTimeCustomers) : 0 }
+      ];
+      
+      const { ws: breakdownWs } = createStyledWorkbook(
+        'Customer Type Revenue Breakdown',
+        breakdownHeaders,
+        breakdownData,
+        breakdownAnalytics
+      );
+      
+      XLSX.utils.book_append_sheet(wb, breakdownWs, 'Customer Type Breakdown');
+    }
+    
     XLSX.writeFile(wb, `Revenue-Summary-${timestamp}.xlsx`);
   };
 
@@ -281,7 +416,8 @@ const Revenue = () => {
     const title = `Transaction Report - ${timestamp}`;
     const headers = ['Customer Name', 'Customer Type', 'Area', 'Wash Type', 'Washer', 'Date', 'Amount', 'Payment Status'];
     
-    const transactionData = data.recentTransactions.map(transaction => [
+    // Use filtered transactions for Excel export
+    const transactionData = filteredTransactions.map(transaction => [
       transaction.customerName,
       transaction.customerType,
       transaction.area,
@@ -292,18 +428,91 @@ const Revenue = () => {
       transaction.isPaid ? 'Paid' : 'Unpaid'
     ]);
     
+    // Calculate customer type breakdown for transactions
+    const oneTimeTransactions = filteredTransactions.filter(t => t.customerType === 'One-time');
+    const monthlyTransactions = filteredTransactions.filter(t => t.customerType === 'Monthly');
+    
     const analyticsData = [
-      { label: 'Total Transactions', value: data.recentTransactions.length },
-      { label: 'Total Amount', value: data.recentTransactions.reduce((sum, t) => sum + t.amount, 0) },
-      { label: 'Paid Transactions', value: data.recentTransactions.filter(t => t.isPaid).length },
-      { label: 'Unpaid Transactions', value: data.recentTransactions.filter(t => !t.isPaid).length },
-      { label: 'Payment Success Rate', value: data.recentTransactions.length ? `${Math.round((data.recentTransactions.filter(t => t.isPaid).length / data.recentTransactions.length) * 100)}%` : '0%' },
-      { label: 'Average Transaction Value', value: data.recentTransactions.length ? Math.round(data.recentTransactions.reduce((sum, t) => sum + t.amount, 0) / data.recentTransactions.length) : 0 }
+      { label: 'Total Transactions (Filtered)', value: filteredTransactions.length },
+      { label: 'Total Amount (Filtered)', value: filteredTransactions.reduce((sum, t) => sum + t.amount, 0) },
+      { label: '═══ CUSTOMER TYPE BREAKDOWN ═══', value: '' },
+      { label: 'One-time Transactions', value: oneTimeTransactions.length },
+      { label: 'One-time Transaction Amount', value: oneTimeTransactions.reduce((sum, t) => sum + t.amount, 0) },
+      { label: 'Monthly Transactions', value: monthlyTransactions.length },
+      { label: 'Monthly Transaction Amount', value: monthlyTransactions.reduce((sum, t) => sum + t.amount, 0) },
+      { label: '═══ PAYMENT ANALYTICS ═══', value: '' },
+      { label: 'Paid Transactions', value: filteredTransactions.filter(t => t.isPaid).length },
+      { label: 'Unpaid Transactions', value: filteredTransactions.filter(t => !t.isPaid).length },
+      { label: 'Payment Success Rate', value: filteredTransactions.length ? `${Math.round((filteredTransactions.filter(t => t.isPaid).length / filteredTransactions.length) * 100)}%` : '0%' },
+      { label: 'Average Transaction Value', value: filteredTransactions.length ? Math.round(filteredTransactions.reduce((sum, t) => sum + t.amount, 0) / filteredTransactions.length) : 0 },
+      { label: 'Applied Filters', value: `Date: ${filters.startDate || 'All'} to ${filters.endDate || 'All'}, Wash Type: ${filters.washType || 'All'}, Customer Type: ${filters.customerType || 'All'}` }
     ];
     
     const { wb, ws } = createStyledWorkbook(title, headers, transactionData, analyticsData);
     
     XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
+    
+    // Add separate sheets for One-time and Monthly transactions if both exist
+    if (oneTimeTransactions.length > 0) {
+      const oneTimeData = oneTimeTransactions.map(transaction => [
+        transaction.customerName,
+        transaction.customerType,
+        transaction.area,
+        transaction.washType,
+        transaction.washerName || 'N/A',
+        new Date(transaction.date).toLocaleDateString('en-GB'),
+        transaction.amount,
+        transaction.isPaid ? 'Paid' : 'Unpaid'
+      ]);
+      
+      const oneTimeAnalytics = [
+        { label: 'One-time Customer Analysis', value: 'Detailed breakdown for one-time customers' },
+        { label: 'Total One-time Transactions', value: oneTimeTransactions.length },
+        { label: 'Total One-time Revenue', value: oneTimeTransactions.reduce((sum, t) => sum + t.amount, 0) },
+        { label: 'Average One-time Transaction', value: Math.round(oneTimeTransactions.reduce((sum, t) => sum + t.amount, 0) / oneTimeTransactions.length) },
+        { label: 'One-time Payment Success Rate', value: `${Math.round((oneTimeTransactions.filter(t => t.isPaid).length / oneTimeTransactions.length) * 100)}%` }
+      ];
+      
+      const { ws: oneTimeWs } = createStyledWorkbook(
+        'One-time Customer Transactions',
+        headers,
+        oneTimeData,
+        oneTimeAnalytics
+      );
+      
+      XLSX.utils.book_append_sheet(wb, oneTimeWs, 'One-time Customers');
+    }
+    
+    if (monthlyTransactions.length > 0) {
+      const monthlyData = monthlyTransactions.map(transaction => [
+        transaction.customerName,
+        transaction.customerType,
+        transaction.area,
+        transaction.washType,
+        transaction.washerName || 'N/A',
+        new Date(transaction.date).toLocaleDateString('en-GB'),
+        transaction.amount,
+        transaction.isPaid ? 'Paid' : 'Unpaid'
+      ]);
+      
+      const monthlyAnalytics = [
+        { label: 'Monthly Customer Analysis', value: 'Detailed breakdown for monthly subscribers' },
+        { label: 'Total Monthly Transactions', value: monthlyTransactions.length },
+        { label: 'Total Monthly Revenue', value: monthlyTransactions.reduce((sum, t) => sum + t.amount, 0) },
+        { label: 'Average Monthly Transaction', value: Math.round(monthlyTransactions.reduce((sum, t) => sum + t.amount, 0) / monthlyTransactions.length) },
+        { label: 'Monthly Payment Success Rate', value: `${Math.round((monthlyTransactions.filter(t => t.isPaid).length / monthlyTransactions.length) * 100)}%` }
+      ];
+      
+      const { ws: monthlyWs } = createStyledWorkbook(
+        'Monthly Customer Transactions',
+        headers,
+        monthlyData,
+        monthlyAnalytics
+      );
+      
+      XLSX.utils.book_append_sheet(wb, monthlyWs, 'Monthly Customers');
+    }
+    
     XLSX.writeFile(wb, `Transactions-${timestamp}.xlsx`);
   };
 
@@ -485,7 +694,7 @@ const Revenue = () => {
       )}
 
       {/* Stats Overview */}
-      {stats && view === 'summary' && (
+      {filteredStats && view === 'summary' && (
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-xl shadow-sm border border-blue-200">
             <div className="flex items-center mb-3">
@@ -495,44 +704,44 @@ const Revenue = () => {
               <h3 className="text-sm font-medium text-blue-800">Gross Revenue</h3>
             </div>
             <p className="text-3xl font-bold text-blue-900">
-              {formatCurrency(stats.totalRevenue)}
+              {formatCurrency(filteredStats.totalRevenue)}
             </p>
             <div className="flex items-center mt-3">
               <Users className="h-4 w-4 text-blue-600 mr-1" />
               <p className="text-sm text-blue-700">
-                From {stats.totalCustomers} customers
+                From {filteredStats.totalCustomers} customers
               </p>
             </div>
           </div>
 
           <div className={`bg-gradient-to-br p-6 rounded-xl shadow-sm border ${
-            stats.netRevenue >= 0 
+            filteredStats.netRevenue >= 0 
               ? 'from-green-50 to-green-100 border-green-200' 
               : 'from-red-50 to-red-100 border-red-200'
           }`}>
             <div className="flex items-center mb-3">
               <div className={`p-2 rounded-lg mr-3 ${
-                stats.netRevenue >= 0 ? 'bg-green-500' : 'bg-red-500'
+                filteredStats.netRevenue >= 0 ? 'bg-green-500' : 'bg-red-500'
               }`}>
                 <DollarSign className="h-5 w-5 text-white" />
               </div>
               <h3 className={`text-sm font-medium ${
-                stats.netRevenue >= 0 ? 'text-green-800' : 'text-red-800'
+                filteredStats.netRevenue >= 0 ? 'text-green-800' : 'text-red-800'
               }`}>Net Revenue</h3>
             </div>
             <p className={`text-3xl font-bold ${
-              stats.netRevenue >= 0 ? 'text-green-900' : 'text-red-900'
+              filteredStats.netRevenue >= 0 ? 'text-green-900' : 'text-red-900'
             }`}>
-              {formatCurrency(stats.netRevenue)}
+              {formatCurrency(filteredStats.netRevenue)}
             </p>
             <div className="flex items-center mt-3">
               <DollarSign className={`h-4 w-4 mr-1 ${
-                stats.netRevenue >= 0 ? 'text-green-600' : 'text-red-600'
+                filteredStats.netRevenue >= 0 ? 'text-green-600' : 'text-red-600'
               }`} />
               <p className={`text-sm ${
-                stats.netRevenue >= 0 ? 'text-green-700' : 'text-red-700'
+                filteredStats.netRevenue >= 0 ? 'text-green-700' : 'text-red-700'
               }`}>
-                After expenses: {formatCurrency(stats.totalExpenses || 0)}
+                After expenses: {formatCurrency(filteredStats.totalExpenses || 0)}
               </p>
             </div>
           </div>
@@ -545,7 +754,7 @@ const Revenue = () => {
               <h3 className="text-sm font-medium text-purple-800">Avg Revenue/Customer</h3>
             </div>
             <p className="text-3xl font-bold text-purple-900">
-              {formatCurrency(stats.totalCustomers ? stats.totalRevenue / stats.totalCustomers : 0)}
+              {formatCurrency(filteredStats.totalCustomers ? filteredStats.totalRevenue / filteredStats.totalCustomers : 0)}
             </p>
             <div className="flex items-center mt-3">
               <DollarSign className="h-4 w-4 text-purple-600 mr-1" />
@@ -563,7 +772,7 @@ const Revenue = () => {
               <h3 className="text-sm font-medium text-green-800">Total Washes</h3>
             </div>
             <p className="text-3xl font-bold text-green-900">
-              {stats.totalWashes}
+              {filteredStats.totalWashes}
             </p>
             <div className="flex items-center mt-3">
               <Calendar className="h-4 w-4 text-green-600 mr-1" />
@@ -581,7 +790,7 @@ const Revenue = () => {
               <h3 className="text-sm font-medium text-amber-800">Average Revenue/Wash</h3>
             </div>
             <p className="text-3xl font-bold text-amber-900">
-              {formatCurrency(stats.totalWashes ? stats.totalRevenue / stats.totalWashes : 0)}
+              {formatCurrency(filteredStats.totalWashes ? filteredStats.totalRevenue / filteredStats.totalWashes : 0)}
             </p>
             <div className="flex items-center mt-3">
               <DollarSign className="h-4 w-4 text-amber-600 mr-1" />
@@ -594,7 +803,7 @@ const Revenue = () => {
       )}
       
       {/* Payment Summary */}
-      {stats && view === 'summary' && stats.paymentSummary && (
+      {filteredStats && view === 'summary' && filteredStats.paymentSummary && (
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-6">
           <div className="flex items-center mb-4">
             <div className="p-2 bg-indigo-100 rounded-lg mr-3">
@@ -608,14 +817,14 @@ const Revenue = () => {
             <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden">
               <div 
                 className="h-full bg-green-500 rounded-full" 
-                style={{ width: `${stats.paymentSummary.total ? Math.round((stats.paymentSummary.paid / stats.paymentSummary.total) * 100) : 100}%` }}
+                style={{ width: `${filteredStats.paymentSummary.total ? Math.round((filteredStats.paymentSummary.paid / filteredStats.paymentSummary.total) * 100) : 100}%` }}
               ></div>
             </div>
             
             {/* Percentage label */}
             <div className="absolute top-0 right-0 text-sm font-medium text-green-600">
-              {stats.paymentSummary.total ? 
-                Math.round((stats.paymentSummary.paid / stats.paymentSummary.total) * 100) : 100}% Paid
+              {filteredStats.paymentSummary.total ? 
+                Math.round((filteredStats.paymentSummary.paid / filteredStats.paymentSummary.total) * 100) : 100}% Paid
             </div>
           </div>
           
@@ -628,7 +837,7 @@ const Revenue = () => {
                 </div>
                 <span className="text-xs px-2 py-1 bg-indigo-200 text-indigo-800 rounded-full">100%</span>
               </div>
-              <p className="text-2xl font-bold text-indigo-900 mt-2">{formatCurrency(stats.paymentSummary.total)}</p>
+              <p className="text-2xl font-bold text-indigo-900 mt-2">{formatCurrency(filteredStats.paymentSummary.total)}</p>
             </div>
             
             <div className="bg-green-50 p-4 rounded-lg border border-green-100">
@@ -638,11 +847,11 @@ const Revenue = () => {
                   <p className="text-sm font-medium text-green-900">Paid Amount</p>
                 </div>
                 <span className="text-xs px-2 py-1 bg-green-200 text-green-800 rounded-full">
-                  {stats.paymentSummary.total ? 
-                    Math.round((stats.paymentSummary.paid / stats.paymentSummary.total) * 100) : 0}%
+                  {filteredStats.paymentSummary.total ? 
+                    Math.round((filteredStats.paymentSummary.paid / filteredStats.paymentSummary.total) * 100) : 0}%
                 </span>
               </div>
-              <p className="text-2xl font-bold text-green-900 mt-2">{formatCurrency(stats.paymentSummary.paid)}</p>
+              <p className="text-2xl font-bold text-green-900 mt-2">{formatCurrency(filteredStats.paymentSummary.paid)}</p>
             </div>
             
             <div className="bg-red-50 p-4 rounded-lg border border-red-100">
@@ -652,18 +861,18 @@ const Revenue = () => {
                   <p className="text-sm font-medium text-red-900">Unpaid Amount</p>
                 </div>
                 <span className="text-xs px-2 py-1 bg-red-200 text-red-800 rounded-full">
-                  {stats.paymentSummary.total ? 
-                    Math.round((stats.paymentSummary.unpaid / stats.paymentSummary.total) * 100) : 0}%
+                  {filteredStats.paymentSummary.total ? 
+                    Math.round((filteredStats.paymentSummary.unpaid / filteredStats.paymentSummary.total) * 100) : 0}%
                 </span>
               </div>
-              <p className="text-2xl font-bold text-red-900 mt-2">{formatCurrency(stats.paymentSummary.unpaid)}</p>
+              <p className="text-2xl font-bold text-red-900 mt-2">{formatCurrency(filteredStats.paymentSummary.unpaid)}</p>
             </div>
           </div>
         </div>
       )}
 
       {/* Revenue Breakdown */}
-      {stats && view === 'summary' && (
+      {filteredStats && view === 'summary' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
             <div className="flex items-center mb-4">
@@ -674,14 +883,14 @@ const Revenue = () => {
             </div>
             
             <div className="space-y-6">
-              {Object.entries(stats.revenueByWashType || {}).map(([type, revenue]: [string, any]) => {
-                const percentage = Math.round((Number(revenue) / stats.totalRevenue) * 100);
+              {Object.entries(filteredStats.revenueByWashType || {}).map(([type, revenue]: [string, any]) => {
+                const percentage = Math.round((Number(revenue) / filteredStats.totalRevenue) * 100);
                 return (
                   <div key={type} className="space-y-2">
                     <div className="flex justify-between items-center">
                       <div>
                         <p className="font-medium text-gray-900">{type}</p>
-                        <p className="text-sm text-gray-500">{stats.washesByType[type] || 0} washes</p>
+                        <p className="text-sm text-gray-500">{filteredStats.washesByType[type] || 0} washes</p>
                       </div>
                       <div className="text-right">
                         <p className="text-lg font-bold text-gray-900">{formatCurrency(revenue as number)}</p>
@@ -709,15 +918,15 @@ const Revenue = () => {
             </div>
             
             <div className="space-y-6">
-              {Object.entries(stats.revenueByCustomerType || {}).map(([type, revenue]: [string, any]) => {
-                const percentage = Math.round((Number(revenue) / stats.totalRevenue) * 100);
+              {Object.entries(filteredStats.revenueByCustomerType || {}).map(([type, revenue]: [string, any]) => {
+                const percentage = Math.round((Number(revenue) / filteredStats.totalRevenue) * 100);
                 return (
                   <div key={type} className="space-y-2">
                     <div className="flex justify-between items-center">
                       <div>
                         <p className="font-medium text-gray-900">{type}</p>
                         <p className="text-sm text-gray-500">
-                          {stats.customersByType[type] || 0} customers
+                          {filteredStats.customersByType[type] || 0} customers
                         </p>
                       </div>
                       <div className="text-right">
@@ -752,8 +961,8 @@ const Revenue = () => {
               </div>
               <div className="text-sm font-medium px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full">
                 {filteredTransactions.length === stats.recentTransactions.length ? 
-                  `Total: ${stats.recentTransactions.length} transactions` : 
-                  `Showing ${filteredTransactions.length} of ${stats.recentTransactions.length} transactions`
+                  `Total: ${filteredStats.recentTransactions.length} transactions` : 
+                  `Showing ${filteredTransactions.length} of ${filteredStats.recentTransactions.length} transactions`
                 }
               </div>
             </div>
