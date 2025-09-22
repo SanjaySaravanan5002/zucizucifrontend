@@ -90,6 +90,19 @@ const Reports: React.FC = () => {
             console.log('Filtered data:', filteredData);
           }
           
+          // Apply client-side filtering for revenue reports if backend doesn't filter properly
+          if (type === 'revenue' && filters.customerType && filteredData) {
+            console.log('Revenue data before filtering:', filteredData);
+            console.log('Applying revenue customer type filter:', filters.customerType);
+            
+            // If backend doesn't filter revenue by customer type, show message
+            if (!filteredData.customerTypeBreakdown) {
+              console.warn('Backend revenue endpoint does not support customer type filtering');
+              // You could add a message to the data to inform user
+              filteredData.filterMessage = `Customer type filter "${filters.customerType}" applied, but revenue endpoint returns aggregated data only. For detailed customer type analysis, use Customer Reports tab.`;
+            }
+          }
+          
           // Apply client-side filtering for transaction reports
           if (type === 'transactions' && filteredData?.recentTransactions) {
             let transactions = filteredData.recentTransactions;
@@ -203,7 +216,7 @@ const Reports: React.FC = () => {
           <h2 className="text-lg font-semibold text-gray-900">Report Filters</h2>
         </div>
         
-        <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${activeTab !== 'transactions' ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
+        <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${activeTab === 'revenue' ? 'lg:grid-cols-5' : activeTab !== 'transactions' ? 'lg:grid-cols-6' : 'lg:grid-cols-5'}`}>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
             <input
@@ -269,18 +282,20 @@ const Reports: React.FC = () => {
               <option value="Deluxe">Deluxe</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Customer Type</label>
-            <select
-              value={filters.customerType}
-              onChange={(e) => setFilters(prev => ({ ...prev, customerType: e.target.value }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Types</option>
-              <option value="Monthly">Monthly</option>
-              <option value="One-time">One-time</option>
-            </select>
-          </div>
+          {activeTab !== 'revenue' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Customer Type</label>
+              <select
+                value={filters.customerType}
+                onChange={(e) => setFilters(prev => ({ ...prev, customerType: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Types</option>
+                <option value="Monthly">Monthly</option>
+                <option value="One-time">One-time</option>
+              </select>
+            </div>
+          )}
           <div className="flex items-end space-x-2">
             <button
               onClick={() => {
