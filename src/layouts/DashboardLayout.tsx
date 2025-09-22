@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Menu, X, LayoutDashboard, Users, Car, ClipboardList, BarChart3, LogOut, Bell, DollarSign, Clock, ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { Menu, X, LayoutDashboard, Users, Car, ClipboardList, BarChart3, LogOut, Bell, DollarSign, Clock, ChevronLeft, ChevronRight, Calendar, Calculator } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import Logo from '../components/Logo';
 
@@ -37,6 +37,7 @@ const DashboardLayout = () => {
     { name: 'Schedule Wash', href: '/schedule-wash', icon: Calendar },
     ...(user?.role === 'superadmin' ? [{ name: 'Revenue', href: '/revenue', icon: BarChart3 }] : []),
     { name: 'Expenses', href: '/expenses', icon: DollarSign },
+    { name: 'Salary Calculation', href: '/salary-calculation', icon: Calculator },
     { name: 'Reports', href: '/reports', icon: BarChart3 },
   ];
   
@@ -54,6 +55,7 @@ const DashboardLayout = () => {
       'Schedule Wash': 'text-teal-500 group-hover:text-teal-600',
       'Revenue': 'text-emerald-500 group-hover:text-emerald-600',
       'Expenses': 'text-red-500 group-hover:text-red-600',
+      'Salary Calculation': 'text-pink-500 group-hover:text-pink-600',
       'Reports': 'text-indigo-500 group-hover:text-indigo-600'
     };
     return colors[itemName] || 'text-gray-500 group-hover:text-gray-700';
@@ -217,3 +219,4 @@ const DashboardLayout = () => {
 };
 
 export default DashboardLayout;
+

@@ -151,15 +151,24 @@ const Dashboard = () => {
     },
   ]);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = async (retryCount = 0) => {
     try {
       setLoading(true);
       const dateParams = startDate && endDate ? `?startDate=${startDate}&endDate=${endDate}` : '';
       
-      // Test connection first
+      // Test connection first with retry for cold start
+      console.log('Testing dashboard connection...');
       const testResult = await apiService.testConnection();
+      console.log('Test result:', testResult);
+      
       if (!testResult.success) {
-        setError('Dashboard service is unavailable. Please try again later.');
+        if (retryCount < 2) {
+          console.log(`Backend cold start detected, retrying... (${retryCount + 1}/3)`);
+          setError('Backend is starting up, please wait...');
+          setTimeout(() => fetchDashboardData(retryCount + 1), 3000);
+          return;
+        }
+        setError(`Dashboard service is unavailable: ${testResult.error || 'Unknown error'}`);
         return;
       }
       
@@ -276,7 +285,13 @@ const Dashboard = () => {
       setError(null);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      setError('Failed to load dashboard data');
+      if (retryCount < 2 && (error.message?.includes('ERR_FAILED') || error.message?.includes('fetch'))) {
+        console.log(`Network error detected, retrying... (${retryCount + 1}/3)`);
+        setError('Backend is starting up, please wait...');
+        setTimeout(() => fetchDashboardData(retryCount + 1), 3000);
+        return;
+      }
+      setError(`Failed to load dashboard data: ${error.message || error}`);
       
       // Set fallback data
       setStatCards([
@@ -350,10 +365,16 @@ const Dashboard = () => {
       try {
         setLoading(true);
         
-        // Test connectivity first
+        // Test connectivity first with cold start handling
         const testResult = await apiService.testConnection();
         if (!testResult.success) {
-          throw new Error('Dashboard service unavailable');
+          setError('Backend is starting up, this may take a few moments...');
+          setTimeout(() => {
+            if (startDate && endDate) {
+              fetchDashboardData();
+            }
+          }, 5000);
+          return;
         }
         
         // Load full data if dates are available
@@ -364,7 +385,7 @@ const Dashboard = () => {
         }
       } catch (error) {
         console.error('Dashboard initialization error:', error);
-        setError('Dashboard service is currently unavailable');
+        setError(`Dashboard service is currently unavailable: ${error.message || error}`);
       } finally {
         setLoading(false);
       }
@@ -728,8 +749,11 @@ const Dashboard = () => {
                 <p className="text-sm text-gray-500">Top performers this month</p>
               </div>
               <div className="flex items-center space-x-2">
-                <button className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500">
-                  <BarChart3 className="h-5 w-5 mr-1" />
+                <button 
+                  onClick={() => navigate('/performance')}
+                  className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors duration-200"
+                >
+                  <BarChart3 className="h-4 w-4 mr-1" />
                   View Details
                 </button>
               </div>
@@ -761,7 +785,10 @@ const Dashboard = () => {
                   {stats.todayLeads.value} new today
                 </span>
               </div>
-              <button className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500">
+              <button 
+                onClick={() => navigate('/leads')}
+                className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors duration-200"
+              >
                 View All Leads
                 <svg className="ml-1 h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
@@ -780,3 +807,4 @@ const Dashboard = () => {
 };
 
 export default Dashboard;
+

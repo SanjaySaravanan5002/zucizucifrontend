@@ -59,7 +59,7 @@ const WasherMonthlySubscriptions: React.FC = () => {
 
   const fetchMonthlySubscriptions = async () => {
     try {
-      const response = await axios.get(`https://zuci-sbackend.onrender.com/api/leads/washer/${user?.id}/monthly-subscriptions`);
+      const response = await axios.get(`https://zuci-sbackend-8.onrender.com/api/leads/washer/${user?.id}/monthly-subscriptions`);
       setSubscriptionLeads(response.data);
     } catch (error) {
       console.error('Error fetching monthly subscriptions:', error);
@@ -74,7 +74,7 @@ const WasherMonthlySubscriptions: React.FC = () => {
 
     try {
       await axios.put(
-        `https://zuci-sbackend.onrender.com/api/leads/${selectedWash.leadId}/monthly-subscription/wash/${selectedWash.washId}`,
+        `https://zuci-sbackend-8.onrender.com/api/leads/${selectedWash.leadId}/monthly-subscription/wash/${selectedWash.washId}`,
         {
           status: 'completed',
           feedback: completionData.feedback,
@@ -409,3 +409,4 @@ const WasherMonthlySubscriptions: React.FC = () => {
 };
 
 export default WasherMonthlySubscriptions;
+

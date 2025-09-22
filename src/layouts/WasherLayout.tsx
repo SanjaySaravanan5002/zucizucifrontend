@@ -203,3 +203,4 @@ const WasherLayout = () => {
 };
 
 export default WasherLayout;
+

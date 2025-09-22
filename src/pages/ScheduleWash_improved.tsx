@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, User, Phone, MapPin, Car, Download, Search, RefreshCw, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-sbackend.onrender.com/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-sbackend-8.onrender.com/api';
 
 interface ScheduledWash {
   _id: string;
@@ -602,3 +602,4 @@ const ScheduleWash = () => {
 };
 
 export default ScheduleWash;
+

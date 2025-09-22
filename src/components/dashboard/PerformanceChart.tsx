@@ -4,8 +4,23 @@ import { Chart, registerables } from 'chart.js';
 Chart.register(...registerables);
 
 interface WasherData {
+  id: string;
   name: string;
-  washes: number;
+  totalWashes: number;
+  completedWashes: number;
+  successRate: number;
+  rating: number;
+  attendancePercentage: number;
+  earnings: number;
+}
+
+interface WasherPerformanceResponse {
+  totalWashers: number;
+  activeWashers: number;
+  totalWashes: number;
+  avgRating: number;
+  avgAttendance: number;
+  washers: WasherData[];
 }
 
 const PerformanceChart = () => {
@@ -18,13 +33,14 @@ const PerformanceChart = () => {
     const fetchData = async () => {
       try {
         const token = localStorage.getItem('auth_token');
-        const response = await fetch('https://zuci-sbackend.onrender.com/api/dashboard/washer-performance', {
+        const response = await fetch('https://zuci-sbackend-12.onrender.com/api/dashboard/washer-performance', {
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           }
         });
-        const data: WasherData[] = await response.json();
+        const responseData: WasherPerformanceResponse = await response.json();
+        const data = responseData.washers || [];
 
         if (!isSubscribed || !chartRef.current) return;
 
@@ -52,7 +68,7 @@ const PerformanceChart = () => {
             datasets: [
               {
                 label: 'Washes Completed',
-                data: data.map(washer => washer.washes),
+                data: data.map(washer => washer.totalWashes),
                 backgroundColor: colors.slice(0, data.length),
                 borderRadius: 4,
                 borderWidth: 0,
@@ -153,3 +169,4 @@ const PerformanceChart = () => {
 };
 
 export default PerformanceChart;
+

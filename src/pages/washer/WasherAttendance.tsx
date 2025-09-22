@@ -30,7 +30,7 @@ const WasherAttendance = () => {
   const fetchAttendance = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`https://zuci-sbackend-6.onrender.com/api/washer/${user?.id}/attendance`, {
+      const response = await axios.get(`https://zuci-sbackend-8.onrender.com/api/washer/${user?.id}/attendance`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -49,7 +49,7 @@ const WasherAttendance = () => {
     try {
       setIsMarkingAttendance(true);
       const token = localStorage.getItem('token');
-      await axios.post('https://zuci-sbackend-6.onrender.com/api/washer/attendance', {
+      await axios.post('https://zuci-sbackend-8.onrender.com/api/washer/attendance', {
         washerId: user?.id,
         type
       }, {
@@ -224,3 +224,5 @@ const WasherAttendance = () => {
 };
 
 export default WasherAttendance;
+
+

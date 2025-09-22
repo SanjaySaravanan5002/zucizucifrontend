@@ -26,7 +26,7 @@ const MonthlyCustomerDebug: React.FC = () => {
       // Test upcoming washes
       try {
         const token = localStorage.getItem('auth_token');
-        const upcomingResponse = await fetch('https://zuci-sbackend.onrender.com/api/leads/upcoming-washes?date=today', {
+        const upcomingResponse = await fetch('https://zuci-sbackend-8.onrender.com/api/leads/upcoming-washes?date=today', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const upcomingData = await upcomingResponse.json();
@@ -141,3 +141,4 @@ const MonthlyCustomerDebug: React.FC = () => {
 };
 
 export default MonthlyCustomerDebug;
+

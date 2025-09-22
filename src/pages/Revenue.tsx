@@ -3,6 +3,8 @@ import api from '../services/apiService';
 import { BarChart2, Download, Filter, ListFilter, RefreshCcw, Search, CreditCard, DollarSign, Calendar, Users, Droplets, ArrowUp, ArrowDown, CheckCircle, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
+import * as XLSX from 'xlsx';
+import { createStyledWorkbook } from '../utils/excelStyles';
 
 interface RevenueStats {
   totalRevenue: number;
@@ -77,7 +79,7 @@ const Revenue = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   const washTypes = ['Premium', 'Deluxe', 'Standard'];
-  const customerTypes = ['Monthly', 'Weekly', 'Daily'];
+  const customerTypes = ['Monthly', 'One-time'];
   
   // Memoize filtered and sorted transactions to avoid recalculation on every render
   const filteredTransactions = useMemo(() => {
@@ -239,59 +241,70 @@ const Revenue = () => {
   const handleExport = () => {
     if (!stats) return;
 
-    let csvData;
-    let filename;
+    const timestamp = filters.startDate || 'all-time';
 
     if (view === 'summary') {
-      // Export summary data
-      csvData = [
-        ['Category', 'Revenue', 'Count'],
-        ['Total', stats.totalRevenue.toString(), stats.totalCustomers.toString()],
-        ['', '', ''],
-        ['By Wash Type', '', ''],
-        ...Object.entries(stats.revenueByWashType).map(([type, revenue]) => 
-          [type, revenue.toString(), stats.washesByType[type].toString()]
-        ),
-        ['', '', ''],
-        ['By Customer Type', '', ''],
-        ...Object.entries(stats.revenueByCustomerType).map(([type, revenue]) => 
-          [type, revenue.toString(), stats.customersByType[type].toString()]
-        ),
-        ['', '', ''],
-        ['Payment Status', '', ''],
-        ['Total', stats.paymentSummary?.total.toString() || '0', ''],
-        ['Paid', stats.paymentSummary?.paid.toString() || '0', stats.paymentSummary?.total ? 
-          `${Math.round((stats.paymentSummary.paid / stats.paymentSummary.total) * 100)}%` : '0%'],
-        ['Unpaid', stats.paymentSummary?.unpaid.toString() || '0', stats.paymentSummary?.total ? 
-          `${Math.round((stats.paymentSummary.unpaid / stats.paymentSummary.total) * 100)}%` : '0%']
-      ];
-      filename = `revenue-summary-${filters.startDate || 'all-time'}.csv`;
+      generateRevenueSummaryExcel(stats, timestamp);
     } else {
-      // Export transaction data
-      csvData = [
-        ['Customer Name', 'Customer Type', 'Area', 'Wash Type', 'Washer', 'Date', 'Amount', 'Payment Status'],
-        ...stats.recentTransactions.map(transaction => [
-          transaction.customerName,
-          transaction.customerType,
-          transaction.area,
-          transaction.washType,
-          transaction.washerName || 'N/A',
-          new Date(transaction.date).toLocaleDateString(),
-          transaction.amount.toString(),
-          transaction.isPaid ? 'Paid' : 'Unpaid'
-        ])
-      ];
-      filename = `transactions-${filters.startDate || 'all-time'}.csv`;
+      generateTransactionsExcel(stats, timestamp);
     }
+  };
 
-    const csvContent = csvData.map(row => row.join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    a.click();
-    window.URL.revokeObjectURL(url);
+  const generateRevenueSummaryExcel = (data: RevenueStats, timestamp: string) => {
+    const title = `Revenue Summary Report - ${timestamp}`;
+    const headers = ['Metric', 'Value', 'Details'];
+    
+    const summaryData = [
+      ['Gross Revenue', data.totalRevenue, `From ${data.totalCustomers} customers`],
+      ['Net Revenue', data.netRevenue, `After expenses: ${formatCurrency(data.totalExpenses || 0)}`],
+      ['Total Washes', data.totalWashes, 'Completed washes'],
+      ['Avg Revenue/Customer', data.totalCustomers ? data.totalRevenue / data.totalCustomers : 0, 'Per customer average'],
+      ['Avg Revenue/Wash', data.totalWashes ? data.totalRevenue / data.totalWashes : 0, 'Per wash average']
+    ];
+    
+    const analyticsData = [
+      { label: 'Payment Success Rate', value: data.paymentSummary?.total ? `${Math.round((data.paymentSummary.paid / data.paymentSummary.total) * 100)}%` : '0%' },
+      { label: 'Outstanding Amount', value: data.paymentSummary?.unpaid || 0 },
+      { label: 'Profit Margin', value: data.totalRevenue ? `${Math.round((data.netRevenue / data.totalRevenue) * 100)}%` : '0%' },
+      { label: 'Total Revenue', value: data.paymentSummary?.total || 0 },
+      { label: 'Paid Amount', value: data.paymentSummary?.paid || 0 },
+      { label: 'Unpaid Amount', value: data.paymentSummary?.unpaid || 0 }
+    ];
+    
+    const { wb, ws } = createStyledWorkbook(title, headers, summaryData, analyticsData);
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'Revenue Summary');
+    XLSX.writeFile(wb, `Revenue-Summary-${timestamp}.xlsx`);
+  };
+
+  const generateTransactionsExcel = (data: RevenueStats, timestamp: string) => {
+    const title = `Transaction Report - ${timestamp}`;
+    const headers = ['Customer Name', 'Customer Type', 'Area', 'Wash Type', 'Washer', 'Date', 'Amount', 'Payment Status'];
+    
+    const transactionData = data.recentTransactions.map(transaction => [
+      transaction.customerName,
+      transaction.customerType,
+      transaction.area,
+      transaction.washType,
+      transaction.washerName || 'N/A',
+      new Date(transaction.date).toLocaleDateString('en-GB'),
+      transaction.amount,
+      transaction.isPaid ? 'Paid' : 'Unpaid'
+    ]);
+    
+    const analyticsData = [
+      { label: 'Total Transactions', value: data.recentTransactions.length },
+      { label: 'Total Amount', value: data.recentTransactions.reduce((sum, t) => sum + t.amount, 0) },
+      { label: 'Paid Transactions', value: data.recentTransactions.filter(t => t.isPaid).length },
+      { label: 'Unpaid Transactions', value: data.recentTransactions.filter(t => !t.isPaid).length },
+      { label: 'Payment Success Rate', value: data.recentTransactions.length ? `${Math.round((data.recentTransactions.filter(t => t.isPaid).length / data.recentTransactions.length) * 100)}%` : '0%' },
+      { label: 'Average Transaction Value', value: data.recentTransactions.length ? Math.round(data.recentTransactions.reduce((sum, t) => sum + t.amount, 0) / data.recentTransactions.length) : 0 }
+    ];
+    
+    const { wb, ws } = createStyledWorkbook(title, headers, transactionData, analyticsData);
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'Transactions');
+    XLSX.writeFile(wb, `Transactions-${timestamp}.xlsx`);
   };
 
   if (loading) {
@@ -1010,3 +1023,4 @@ const Revenue = () => {
 };
 
 export default Revenue;
+

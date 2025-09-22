@@ -383,3 +383,4 @@ const SmartWashScheduler: React.FC<SmartWashSchedulerProps> = ({
 };
 
 export default SmartWashScheduler;
+

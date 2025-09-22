@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Search, Calendar, Eye, Phone, Car, MapPin, Download } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { apiService } from '../services/apiService';
+import * as XLSX from 'xlsx';
+import { createStyledWorkbook } from '../utils/excelStyles';
 
 interface UpcomingWash {
   id: number;
@@ -71,7 +73,7 @@ const UpcomingWash = () => {
         if (dateFilter === 'week') {
           // For week view, we need to fetch all leads and extract their scheduled washes
           try {
-            const allLeadsResponse = await fetch('https://zuci-sbackend-2.onrender.com/api/leads', {
+            const allLeadsResponse = await fetch('https://zuci-sbackend-8.onrender.com/api/leads', {
               headers: {
                 'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
                 'Content-Type': 'application/json'
@@ -216,7 +218,31 @@ const UpcomingWash = () => {
     washer: customer.upcomingWash?.washer
   }));
   
-  const filteredCustomers = displayData;
+  // Apply client-side filtering
+  const filteredCustomers = displayData.filter(entry => {
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = 
+        entry.customerName.toLowerCase().includes(query) ||
+        entry.phone.includes(query) ||
+        entry.area.toLowerCase().includes(query) ||
+        entry.carModel.toLowerCase().includes(query);
+      if (!matchesSearch) return false;
+    }
+    
+    // Customer type filter
+    if (typeFilter && entry.leadType !== typeFilter) {
+      return false;
+    }
+    
+    // Source filter
+    if (sourceFilter && entry.leadSource !== sourceFilter) {
+      return false;
+    }
+    
+    return true;
+  });
 
   const getDateFilterText = () => {
     switch (dateFilter) {
@@ -227,59 +253,52 @@ const UpcomingWash = () => {
     }
   };
 
-  const downloadCSV = () => {
+  const downloadExcel = () => {
     if (filteredCustomers.length === 0) {
       alert('No data to download');
       return;
     }
 
-    // Group wash entries by date and time
-    const groupedData = filteredCustomers.reduce((acc, entry) => {
-      const washDate = new Date(entry.washDate);
-      const dateKey = washDate.toLocaleDateString();
-      const dayName = washDate.toLocaleDateString('en-US', { weekday: 'long' });
-      
-      if (!acc[dateKey]) {
-        acc[dateKey] = {
-          day: dayName,
-          date: dateKey,
-          customers: []
-        };
-      }
-      
-      acc[dateKey].customers.push({
-        time: '9:00 AM - 9:00 PM', // Default time range
-        customerName: entry.customerName,
-        phone: entry.phone,
-        area: entry.area,
-        carModel: entry.carModel,
-        washType: entry.washType,
-        customerType: entry.leadType,
-        source: entry.leadSource
-      });
-      
-      return acc;
-    }, {});
-
-    // Create CSV content
-    let csvContent = 'Day,Date,Time,Customer Name,Phone,Area,Car Model,Wash Type,Customer Type,Source\n';
+    const title = `Upcoming Wash Schedule - ${getDateFilterText()}`;
+    const headers = ['Day', 'Date', 'Customer Name', 'Phone', 'Area', 'Car Model', 'Wash Type', 'Customer Type', 'Source', 'Washer'];
     
-    Object.values(groupedData).forEach((dayData: any) => {
-      dayData.customers.forEach((customer: any) => {
-        csvContent += `${dayData.day},${dayData.date},${customer.time},${customer.customerName},${customer.phone},${customer.area},${customer.carModel},${customer.washType},${customer.customerType},${customer.source}\n`;
-      });
+    const washData = filteredCustomers.map(entry => {
+      const washDate = new Date(entry.washDate);
+      const dayName = washDate.toLocaleDateString('en-GB', { weekday: 'long' });
+      const dateStr = washDate.toLocaleDateString('en-GB');
+      
+      return [
+        dayName,
+        dateStr,
+        entry.customerName,
+        entry.phone,
+        entry.area,
+        entry.carModel,
+        entry.washType,
+        entry.leadType,
+        entry.leadSource,
+        entry.washer || 'Unassigned'
+      ];
     });
-
-    // Download CSV
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `upcoming-washes-${getDateFilterText().toLowerCase().replace(' ', '-')}-${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    
+    // Group by customer type for analytics
+    const monthlyCustomers = filteredCustomers.filter(c => c.leadType === 'Monthly').length;
+    const oneTimeCustomers = filteredCustomers.filter(c => c.leadType === 'One-time').length;
+    const assignedWashes = filteredCustomers.filter(c => c.washer && c.washer !== 'Unassigned').length;
+    
+    const analyticsData = [
+      { label: 'Total Upcoming Washes', value: filteredCustomers.length },
+      { label: 'Monthly Customers', value: monthlyCustomers },
+      { label: 'One-time Customers', value: oneTimeCustomers },
+      { label: 'Assigned Washes', value: assignedWashes },
+      { label: 'Unassigned Washes', value: filteredCustomers.length - assignedWashes },
+      { label: 'Assignment Rate', value: `${Math.round((assignedWashes / filteredCustomers.length) * 100)}%` }
+    ];
+    
+    const { wb, ws } = createStyledWorkbook(title, headers, washData, analyticsData);
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'Upcoming Washes');
+    XLSX.writeFile(wb, `Upcoming-Washes-${getDateFilterText().toLowerCase().replace(' ', '-')}-${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   return (
@@ -373,13 +392,13 @@ const UpcomingWash = () => {
             Reset Filters
           </button>
           
-          {dateFilter === 'week' && filteredCustomers.length > 0 && (
+          {filteredCustomers.length > 0 && (
             <button
-              onClick={downloadCSV}
+              onClick={downloadExcel}
               className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center"
             >
               <Download className="h-4 w-4 mr-2" />
-              Download Weekly Schedule
+              Download Schedule
             </button>
           )}
         </div>
@@ -498,3 +517,4 @@ const UpcomingWash = () => {
 };
 
 export default UpcomingWash;
+

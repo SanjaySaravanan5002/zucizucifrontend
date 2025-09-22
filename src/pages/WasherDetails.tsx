@@ -72,10 +72,11 @@ const WasherDetails = () => {
   });
   const [aadharFile, setAadharFile] = useState<File | null>(null);
   const [drivingLicenseFile, setDrivingLicenseFile] = useState<File | null>(null);
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [attendance, setAttendance] = useState<{ attendance: AttendanceRecord[], stats: any } | null>(null);
   const [isMarkingAttendance, setIsMarkingAttendance] = useState(false);
 
-  const API_BASE_URL = 'https://zuci-sbackend.onrender.com/api';
+  const API_BASE_URL = 'https://zuci-sbackend-12.onrender.com/api';
 
   const fetchAttendance = async () => {
     if (!id) return;
@@ -348,6 +349,9 @@ const WasherDetails = () => {
                     if (drivingLicenseFile) {
                       formData.append('drivingLicenseImage', drivingLicenseFile);
                     }
+                    if (profilePhotoFile) {
+                      formData.append('profilePhoto', profilePhotoFile);
+                    }
 
                     const response = await axios.put(
                       `${API_BASE_URL}/washer/${id}/personal-details`,
@@ -435,6 +439,21 @@ const WasherDetails = () => {
                       onChange={(e) => setPersonalDetails({ ...personalDetails, password: e.target.value })}
                       placeholder="Leave blank to keep current password"
                     />
+                  </div>
+
+                  <div>
+                    <label htmlFor="profilePhoto" className="block text-sm font-medium text-gray-700 mb-1">
+                      Profile Photo
+                    </label>
+                    <div className="mt-1 flex items-center">
+                      <input
+                        type="file"
+                        id="profilePhoto"
+                        accept="image/*"
+                        onChange={(e) => setProfilePhotoFile(e.target.files?.[0] || null)}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition-colors"
+                      />
+                    </div>
                   </div>
 
                   <div>
@@ -736,3 +755,5 @@ const WasherDetails = () => {
 };
 
 export default WasherDetails;
+
+

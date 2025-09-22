@@ -120,3 +120,4 @@ const AttendanceCard: React.FC<AttendanceCardProps> = ({ washer }) => {
 };
 
 export default AttendanceCard;
+

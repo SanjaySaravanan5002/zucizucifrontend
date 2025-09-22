@@ -30,3 +30,4 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
 };
 
 export default StatusBadge;
+

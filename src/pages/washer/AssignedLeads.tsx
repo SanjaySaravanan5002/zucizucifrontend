@@ -139,7 +139,7 @@ const AssignedLeads = () => {
     try {
       console.log('Fetching assigned leads for user ID:', user?.id);
       const token = localStorage.getItem('auth_token');
-      const response = await axios.get(`https://zuci-sbackend.onrender.com/api/washer/${user?.id}/assigned-leads`, {
+      const response = await axios.get(`https://zuci-sbackend-8.onrender.com/api/washer/${user?.id}/assigned-leads`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -176,7 +176,7 @@ const AssignedLeads = () => {
         requestData.duration = Math.round(timer.elapsed / (1000 * 60));
       }
       
-      await axios.put(`https://zuci-sbackend.onrender.com/api/leads/${leadId}/wash-history/${washId}`, requestData, {
+      await axios.put(`https://zuci-sbackend-8.onrender.com/api/leads/${leadId}/wash-history/${washId}`, requestData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -237,7 +237,7 @@ const AssignedLeads = () => {
         requestData.duration = Math.round(timer.elapsed / (1000 * 60)); // in minutes
       }
       
-      const response = await axios.put(`https://zuci-sbackend.onrender.com/api/leads/${leadId}/monthly-subscription/wash/${washId}`, requestData, {
+      const response = await axios.put(`https://zuci-sbackend-8.onrender.com/api/leads/${leadId}/monthly-subscription/wash/${washId}`, requestData, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -263,7 +263,7 @@ const AssignedLeads = () => {
       const timerKey = `onetime-${leadId}`;
       const timer = washTimer[timerKey];
       
-      const response = await axios.put(`https://zuci-sbackend.onrender.com/api/leads/${leadId}/onetime-wash/update`, {
+      const response = await axios.put(`https://zuci-sbackend-8.onrender.com/api/leads/${leadId}/onetime-wash/update`, {
         status: 'completed',
         feedback: updateData.feedback || '',
         startTime: timer?.startTime,
@@ -291,7 +291,7 @@ const AssignedLeads = () => {
     try {
       // Fetch lead details with location data
       const token = localStorage.getItem('auth_token');
-      const response = await axios.get(`https://zuci-sbackend.onrender.com/api/leads/${lead.id}`, {
+      const response = await axios.get(`https://zuci-sbackend-8.onrender.com/api/leads/${lead.id}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -1005,3 +1005,5 @@ const AssignedLeads = () => {
 };
 
 export default AssignedLeads;
+
+

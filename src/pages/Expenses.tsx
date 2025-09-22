@@ -18,6 +18,12 @@ const Expenses: React.FC = () => {
   const [totalRevenue, setTotalRevenue] = useState(0);
   const [netRevenue, setNetRevenue] = useState(0);
   const [totalExpenses, setTotalExpenses] = useState(0);
+  const [filters, setFilters] = useState({
+    name: '',
+    reason: '',
+    startDate: '',
+    endDate: ''
+  });
   
   // Check if user is admin (can only manage expenses, not view revenue)
   const isAdmin = user?.role === 'admin';
@@ -29,12 +35,18 @@ const Expenses: React.FC = () => {
       fetchRevenue(); // Only superadmin can see revenue data
     }
     fetchWashers();
-  }, [isSuperAdmin]);
+  }, [isSuperAdmin, filters]);
 
   const fetchExpenses = async () => {
     try {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      const response = await axios.get('https://zuci-sbackend.onrender.com/api/expenses', {
+      const params = new URLSearchParams();
+      if (filters.name) params.append('name', filters.name);
+      if (filters.reason) params.append('reason', filters.reason);
+      if (filters.startDate) params.append('startDate', filters.startDate);
+      if (filters.endDate) params.append('endDate', filters.endDate);
+      
+      const response = await axios.get(`https://zuci-sbackend-12.onrender.com/api/expenses?${params.toString()}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -53,7 +65,7 @@ const Expenses: React.FC = () => {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
       
       // Use the same API as Revenue tab - fetch all-time revenue without date filters
-      const response = await axios.get('https://zuci-sbackend.onrender.com/api/reports/revenue_and_income', {
+      const response = await axios.get('https://zuci-sbackend-12.onrender.com/api/reports/revenue_and_income', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -89,7 +101,7 @@ const Expenses: React.FC = () => {
   const fetchWashers = async () => {
     try {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      const response = await axios.get('https://zuci-sbackend.onrender.com/api/expenses/washers', {
+      const response = await axios.get('https://zuci-sbackend-12.onrender.com/api/expenses/washers', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -103,7 +115,7 @@ const Expenses: React.FC = () => {
   const addExpense = async () => {
     try {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      await axios.post('https://zuci-sbackend.onrender.com/api/expenses', {
+      await axios.post('https://zuci-sbackend-12.onrender.com/api/expenses', {
         ...newExpense,
         amount: parseFloat(newExpense.amount)
       }, {
@@ -123,7 +135,7 @@ const Expenses: React.FC = () => {
   const deleteExpense = async (id: string) => {
     try {
       const token = localStorage.getItem('auth_token') || localStorage.getItem('token');
-      await axios.delete(`https://zuci-sbackend.onrender.com/api/expenses/${id}`, {
+      await axios.delete(`https://zuci-sbackend-12.onrender.com/api/expenses/${id}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -252,6 +264,64 @@ const Expenses: React.FC = () => {
         </div>
       )}
 
+      {/* Filters Section */}
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg font-medium mb-4">Filter Expenses</h3>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Washer Name</label>
+            <select
+              value={filters.name}
+              onChange={(e) => setFilters(prev => ({ ...prev, name: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Washers</option>
+              {washers.map((washer) => (
+                <option key={washer._id} value={washer.name}>
+                  {washer.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Reason</label>
+            <input
+              type="text"
+              placeholder="Filter by reason"
+              value={filters.reason}
+              onChange={(e) => setFilters(prev => ({ ...prev, reason: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+            <input
+              type="date"
+              value={filters.startDate}
+              onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+            <input
+              type="date"
+              value={filters.endDate}
+              onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value }))}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+        <div className="mt-4 flex justify-end">
+          <button
+            onClick={() => setFilters({ name: '', reason: '', startDate: '', endDate: '' })}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            Clear Filters
+          </button>
+        </div>
+      </div>
+
       {/* Add Expense Section */}
       <div className="bg-white rounded-lg shadow p-6">
         <div className="flex justify-between items-center mb-4">
@@ -373,3 +443,4 @@ const Expenses: React.FC = () => {
 };
 
 export default Expenses;
+

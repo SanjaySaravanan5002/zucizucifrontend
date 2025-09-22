@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, User, Phone, MapPin, Car, Download, Search, Filter, RefreshCw } from 'lucide-react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
+import { createStyledWorkbook } from '../utils/excelStyles';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-sbackend-2.onrender.com/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-sbackend-8.onrender.com/api';
 
 interface ScheduledWash {
   _id: string;
@@ -11,6 +13,9 @@ interface ScheduledWash {
   area: string;
   carModel: string;
   washType: string;
+  washCategory?: string; // Interior or Exterior
+  washServiceType?: string; // Interior or Exterior
+  serviceType?: string; // Interior or Exterior (alternative field)
   scheduledDate: string;
   washer?: { name: string };
   leadId: string;
@@ -168,9 +173,38 @@ const ScheduleWash = () => {
   };
 
   // Handle customer click
-  const handleCustomerClick = (wash: ScheduledWash) => {
-    setSelectedCustomer(wash);
-    setShowModal(true);
+  const handleCustomerClick = async (wash: ScheduledWash) => {
+    try {
+      // Fetch lead details to get the correct wash service type
+      const response = await axios.get(`${API_BASE_URL}/leads/${wash.leadId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
+        }
+      });
+      
+      const leadData = response.data;
+      
+      // Find the wash history entry that matches the scheduled date
+      const scheduledDate = new Date(wash.scheduledDate).toDateString();
+      const matchingWashEntry = leadData.washHistory?.find((entry: any) => {
+        const entryDate = new Date(entry.date).toDateString();
+        return entryDate === scheduledDate && entry.washType === wash.washType;
+      });
+      
+      // Update the selected customer with the correct wash service type
+      const updatedWash = {
+        ...wash,
+        washServiceType: matchingWashEntry?.washServiceType || matchingWashEntry?.serviceType || wash.washServiceType || wash.serviceType || 'Exterior'
+      };
+      
+      setSelectedCustomer(updatedWash);
+      setShowModal(true);
+    } catch (error) {
+      console.error('Error fetching lead details:', error);
+      // Fallback to original wash data if API call fails
+      setSelectedCustomer(wash);
+      setShowModal(true);
+    }
   };
 
   // Handle edit wash
@@ -224,32 +258,43 @@ const ScheduleWash = () => {
     const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
     const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
     
-    let csvContent = 'Date,Customer Name,Phone,Area,Car Model,Wash Type,Status,Washer\n';
-    
-    scheduledWashes.forEach(wash => {
+    const monthlyWashes = scheduledWashes.filter(wash => {
       const washDate = new Date(wash.scheduledDate);
-      if (washDate >= monthStart && washDate <= monthEnd) {
-        const row = [
-          new Date(wash.scheduledDate).toLocaleDateString(),
-          wash.customerName,
-          wash.phone,
-          wash.area,
-          wash.carModel,
-          wash.washType,
-          wash.status || 'Pending',
-          wash.washer?.name || 'Not Assigned'
-        ].map(field => `"${field}"`).join(',');
-        csvContent += row + '\n';
-      }
+      return washDate >= monthStart && washDate <= monthEnd;
     });
     
-    const blob = new Blob([csvContent], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `schedule-wash-${months[currentDate.getMonth()]}-${currentDate.getFullYear()}.csv`;
-    link.click();
-    window.URL.revokeObjectURL(url);
+    if (monthlyWashes.length === 0) {
+      alert('No scheduled washes to download for this month');
+      return;
+    }
+    
+    const title = `Schedule Wash Report - ${months[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+    const headers = ['Date', 'Customer Name', 'Phone', 'Area', 'Car Model', 'Wash Type', 'Status', 'Washer'];
+    
+    const washData = monthlyWashes.map(wash => [
+      new Date(wash.scheduledDate).toLocaleDateString('en-GB'),
+      wash.customerName,
+      wash.phone,
+      wash.area,
+      wash.carModel,
+      wash.washType,
+      wash.status || 'Pending',
+      wash.washer?.name || 'Not Assigned'
+    ]);
+    
+    const analyticsData = [
+      { label: 'Total Scheduled Washes', value: monthlyWashes.length },
+      { label: 'Completed Washes', value: monthlyWashes.filter(w => w.status === 'completed').length },
+      { label: 'Pending Washes', value: monthlyWashes.filter(w => w.status !== 'completed').length },
+      { label: 'Assigned Washes', value: monthlyWashes.filter(w => w.washer?.name).length },
+      { label: 'Unassigned Washes', value: monthlyWashes.filter(w => !w.washer?.name).length },
+      { label: 'Completion Rate', value: `${Math.round((monthlyWashes.filter(w => w.status === 'completed').length / monthlyWashes.length) * 100)}%` }
+    ];
+    
+    const { wb, ws } = createStyledWorkbook(title, headers, washData, analyticsData);
+    
+    XLSX.utils.book_append_sheet(wb, ws, 'Schedule Report');
+    XLSX.writeFile(wb, `Schedule-Wash-${months[currentDate.getMonth()]}-${currentDate.getFullYear()}.xlsx`);
   };
 
   const calendarDays = getCalendarDays();
@@ -485,6 +530,7 @@ const ScheduleWash = () => {
                   ) : (
                     <p className="text-sm text-orange-600 flex items-center">⚠️ <span className="ml-1">No washer assigned</span></p>
                   )}
+                  <p className="text-sm text-gray-600 flex items-center">🚿 <span className="ml-1">Wash Type: {selectedCustomer.washServiceType || selectedCustomer.serviceType || selectedCustomer.washCategory || 'Exterior'}</span></p>
                   <p className="text-sm text-gray-600 flex items-center">
                     📊 <span className="ml-1">Status: <span className={`font-medium ${
                       selectedCustomer.status === 'completed' ? 'text-green-600' : 
@@ -675,3 +721,4 @@ const ScheduleWash = () => {
 };
 
 export default ScheduleWash;
+

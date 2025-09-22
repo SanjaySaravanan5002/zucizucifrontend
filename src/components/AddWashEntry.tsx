@@ -22,12 +22,14 @@ interface ScheduledWash {
   serviceType: 'Exterior' | 'Interior' | 'Full Service';
   carName: string;
   carNumber: string;
+  assignedWasher?: string;
 }
 
 const AddWashEntry: React.FC<AddWashEntryProps> = ({ isOpen, onClose, onSuccess }) => {
   const [washType, setWashType] = useState<'one-time' | 'monthly'>('one-time');
   const [customPlans, setCustomPlans] = useState<CustomPlan[]>([]);
   const [showCreatePlan, setShowCreatePlan] = useState(false);
+  const [washers, setWashers] = useState<Array<{_id: string, id: number, name: string}>>([]);
   
   // Customer details
   const [customerData, setCustomerData] = useState({
@@ -50,13 +52,14 @@ const AddWashEntry: React.FC<AddWashEntryProps> = ({ isOpen, onClose, onSuccess 
   // Monthly subscription data
   const [monthlyData, setMonthlyData] = useState({
     packageType: 'Basic',
-    customPlanName: '',
-    totalAmount: 0,
-    totalWashes: 0,
-    interiorWashes: 0,
+    customPlanName: 'Basic',
+    totalAmount: 300,
+    totalWashes: 3,
+    interiorWashes: 1,
     startDate: '',
     endDate: '',
     customerInterval: 7,
+    defaultWasher: '', // Single washer for all washes
     scheduledWashes: [] as ScheduledWash[]
   });
 
@@ -74,8 +77,20 @@ const AddWashEntry: React.FC<AddWashEntryProps> = ({ isOpen, onClose, onSuccess 
   useEffect(() => {
     if (isOpen) {
       fetchCustomPlans();
+      fetchWashers();
     }
   }, [isOpen]);
+
+  const fetchWashers = async () => {
+    try {
+      const response = await apiService.get('/washer/list?forAssignment=true');
+      if (response.success) {
+        setWashers(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching washers:', error);
+    }
+  };
 
   // Calculate end date based on start date (30 days max)
   useEffect(() => {
@@ -111,15 +126,20 @@ const AddWashEntry: React.FC<AddWashEntryProps> = ({ isOpen, onClose, onSuccess 
     };
 
     const details = packageDetails[packageType] || packageDetails['Basic'];
+    console.log('Package changed to:', packageType, 'Details:', details);
     
-    setMonthlyData(prev => ({
-      ...prev,
-      packageType,
-      totalAmount: details.price,
-      totalWashes: details.washes,
-      interiorWashes: details.interior,
-      customPlanName: packageType === 'Custom' ? '' : packageType
-    }));
+    setMonthlyData(prev => {
+      const newData = {
+        ...prev,
+        packageType,
+        totalAmount: details.price,
+        totalWashes: details.washes,
+        interiorWashes: details.interior,
+        customPlanName: packageType === 'Custom' ? '' : packageType
+      };
+      console.log('New monthly data:', newData);
+      return newData;
+    });
   };
 
   const handleCustomPlanSelect = (plan: CustomPlan) => {
@@ -188,7 +208,8 @@ const AddWashEntry: React.FC<AddWashEntryProps> = ({ isOpen, onClose, onSuccess 
         scheduledTime: '09:00',
         serviceType,
         carName: customerData.carModel,
-        carNumber: customerData.carNumber
+        carNumber: customerData.carNumber,
+        assignedWasher: monthlyData.defaultWasher
       });
     }
 
@@ -253,7 +274,7 @@ const AddWashEntry: React.FC<AddWashEntryProps> = ({ isOpen, onClose, onSuccess 
     setOneTimeData({ washType: 'Basic', amount: '', scheduledDate: '', scheduledTime: '09:00', serviceType: 'Exterior' });
     setMonthlyData({ 
       packageType: 'Basic', customPlanName: '', totalAmount: 0, totalWashes: 0, 
-      interiorWashes: 0, startDate: '', endDate: '', customerInterval: 7, scheduledWashes: [] 
+      interiorWashes: 0, startDate: '', endDate: '', customerInterval: 7, defaultWasher: '', scheduledWashes: [] 
     });
     setWashType('one-time');
   };
@@ -636,6 +657,22 @@ const AddWashEntry: React.FC<AddWashEntryProps> = ({ isOpen, onClose, onSuccess 
                           </select>
                         </div>
                         
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Default Washer (Auto-assign to all washes)</label>
+                          <select
+                            value={monthlyData.defaultWasher}
+                            onChange={(e) => setMonthlyData(prev => ({ ...prev, defaultWasher: e.target.value }))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">No Default Washer</option>
+                            {washers.map((washer) => (
+                              <option key={washer._id} value={washer.id}>
+                                {washer.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Number of Cars</label>
@@ -672,7 +709,7 @@ const AddWashEntry: React.FC<AddWashEntryProps> = ({ isOpen, onClose, onSuccess 
                           <h6 className="font-medium text-gray-900 mb-3">Wash List ({monthlyData.scheduledWashes.length} washes)</h6>
                           <div className="max-h-60 overflow-y-auto space-y-2">
                             {monthlyData.scheduledWashes.map((wash, index) => (
-                              <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-2 p-3 bg-gray-50 rounded-lg">
+                              <div key={index} className="grid grid-cols-1 md:grid-cols-6 gap-2 p-3 bg-gray-50 rounded-lg">
                                 <div className="flex items-center">
                                   <span className="text-sm font-medium">Wash {wash.washNumber}</span>
                                 </div>
@@ -703,6 +740,20 @@ const AddWashEntry: React.FC<AddWashEntryProps> = ({ isOpen, onClose, onSuccess 
                                     <option value="Full Service">Full Service</option>
                                   </select>
                                 </div>
+                                <div>
+                                  <select
+                                    value={wash.assignedWasher || ''}
+                                    onChange={(e) => updateScheduledWash(index, 'assignedWasher', e.target.value)}
+                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                                  >
+                                    <option value="">Assign Washer</option>
+                                    {washers.map((washer) => (
+                                      <option key={washer._id} value={washer.id}>
+                                        {washer.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
                                 <div className="text-sm text-gray-600 flex items-center">
                                   <Car className="h-3 w-3 mr-1" />
                                   <span className="font-medium">{wash.carName}</span>
@@ -719,9 +770,25 @@ const AddWashEntry: React.FC<AddWashEntryProps> = ({ isOpen, onClose, onSuccess 
                   {/* For Existing Packages - Show Simple Manual Entry ONLY */}
                   {(monthlyData.packageType === 'Basic' || monthlyData.packageType === 'Premium' || monthlyData.packageType === 'Deluxe') && (
                     <div className="bg-white p-4 rounded-lg border">
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Default Washer (Auto-assign to all washes)</label>
+                        <select
+                          value={monthlyData.defaultWasher}
+                          onChange={(e) => setMonthlyData(prev => ({ ...prev, defaultWasher: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">No Default Washer</option>
+                          {washers.map((washer) => (
+                            <option key={washer._id} value={washer.id}>
+                              {washer.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
                       <h5 className="font-medium text-gray-900 mb-4">Wash List ({monthlyData.totalWashes} washes)</h5>
+                      {console.log('Rendering wash list with totalWashes:', monthlyData.totalWashes, 'washers:', washers.length)}
                       
-                      <div className="space-y-3">
+                      <div className="space-y-3" key={`${monthlyData.packageType}-${monthlyData.totalWashes}`}>
                         {Array.from({ length: monthlyData.totalWashes }, (_, index) => {
                           // Simple interior wash distribution for existing packages
                           let isInterior = false;
@@ -731,7 +798,7 @@ const AddWashEntry: React.FC<AddWashEntryProps> = ({ isOpen, onClose, onSuccess 
                           }
                           
                           return (
-                            <div key={index} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                            <div key={index} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
                               <div className="text-sm font-medium min-w-[60px]">Wash {index + 1}</div>
                               <div className="flex-1">
                                 <input
@@ -755,6 +822,18 @@ const AddWashEntry: React.FC<AddWashEntryProps> = ({ isOpen, onClose, onSuccess 
                                   <option value="Exterior">Exterior</option>
                                   <option value="Interior">Interior</option>
                                 </select>
+                              </div>
+                              <div className="w-32">
+                                <div className="text-sm text-gray-600 px-2 py-1 bg-gray-100 rounded">
+                                  {monthlyData.defaultWasher ? 
+                                    washers.find(w => w.id.toString() === monthlyData.defaultWasher.toString())?.name || 'Unknown' 
+                                    : 'Not Assigned'
+                                  }
+                                </div>
+                              </div>
+                              <div className="text-sm text-gray-600 flex items-center min-w-[100px]">
+                                <span className="font-medium">Car{index + 1}</span>
+                                <span className="ml-1 text-xs">- THAR</span>
                               </div>
                             </div>
                           );

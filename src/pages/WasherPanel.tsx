@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { User, UserPlus, Loader2, RefreshCw, Phone, Mail, CheckCircle, XCircle, Eye } from 'lucide-react';
+import { User, UserPlus, Loader2, RefreshCw, Phone, Mail, CheckCircle, XCircle, Eye, Edit, Trash2, Upload, Camera } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 
@@ -14,6 +14,11 @@ interface Washer {
   phone: string;
   status: string;
   createdAt: string;
+  address?: string;
+  salary?: {
+    base: number;
+    bonus: number;
+  };
   summary?: {
     total: number;
     completed: number;
@@ -26,6 +31,10 @@ interface WasherFormData {
   email: string;
   phone: string;
   password: string;
+  salary?: {
+    base: number;
+    bonus: number;
+  };
 }
 
 
@@ -42,10 +51,18 @@ const WasherPanel = () => {
     name: '',
     email: '',
     phone: '',
-    password: ''
+    password: '',
+    salary: {
+      base: 0,
+      bonus: 0
+    }
   });
+  const [editWasher, setEditWasher] = useState<Washer | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [selectedWasher, setSelectedWasher] = useState<Washer | null>(null);
 
-  const API_BASE_URL = 'https://zuci-sbackend.onrender.com/api';
+  const API_BASE_URL = 'https://zuci-sbackend-12.onrender.com/api';
 
   // Fetch washers list (all washers for management)
   useEffect(() => {
@@ -104,9 +121,69 @@ const WasherPanel = () => {
       const response = await axios.post(`${API_BASE_URL}/washer/create`, newWasher);
       setWashers([...washers, { ...response.data, summary: { total: 0, completed: 0, pending: 0 } }]);
       setShowCreateForm(false);
-      setNewWasher({ name: '', email: '', phone: '', password: '' });
+      setNewWasher({ name: '', email: '', phone: '', password: '', salary: { base: 0, bonus: 0 } });
+      toast.success('Washer created successfully');
     } catch (err: any) {
       toast.error(err.response?.data?.message || 'Failed to create washer');
+    }
+  };
+
+  const handleEditWasher = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editWasher) return;
+    
+    try {
+      await axios.put(`${API_BASE_URL}/washer/${editWasher.id}`, {
+        name: editWasher.name,
+        email: editWasher.email,
+        phone: editWasher.phone,
+        address: editWasher.address,
+        salary: editWasher.salary
+      });
+      
+      setWashers(washers.map(w => w.id === editWasher.id ? editWasher : w));
+      setShowEditModal(false);
+      setEditWasher(null);
+      toast.success('Washer updated successfully');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to update washer');
+    }
+  };
+
+  const handleDeleteWasher = async (washerId: string) => {
+    if (!window.confirm('Are you sure you want to delete this washer?')) return;
+    
+    try {
+      await axios.delete(`${API_BASE_URL}/washer/${washerId}`);
+      setWashers(washers.filter(w => w.id !== washerId));
+      toast.success('Washer deleted successfully');
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || 'Failed to delete washer');
+    }
+  };
+
+  const handlePhotoUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedWasher) return;
+    
+    const formData = new FormData();
+    const fileInput = document.getElementById('photoUpload') as HTMLInputElement;
+    
+    if (fileInput?.files?.[0]) {
+      formData.append('profilePhoto', fileInput.files[0]);
+      
+      try {
+        await axios.post(`${API_BASE_URL}/washer/${selectedWasher.id}/upload-photos`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        
+        setShowPhotoModal(false);
+        setSelectedWasher(null);
+        toast.success('Photo uploaded successfully');
+        handleRefresh();
+      } catch (err: any) {
+        toast.error(err.response?.data?.message || 'Failed to upload photo');
+      }
     }
   };
 
@@ -193,6 +270,24 @@ const WasherPanel = () => {
                   title="Password must be at least 6 characters long"
                 />
               </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Base Salary (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={newWasher.salary?.base || ''}
+                  onChange={(e) => setNewWasher({ 
+                    ...newWasher, 
+                    salary: { 
+                      ...newWasher.salary, 
+                      base: parseFloat(e.target.value) || 0 
+                    } 
+                  })}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  placeholder="Enter base salary amount"
+                />
+              </div>
+
               <div className="flex justify-end space-x-3">
                 <button
                   type="button"
@@ -234,9 +329,7 @@ const WasherPanel = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Phone</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Completed</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pending</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -271,16 +364,6 @@ const WasherPanel = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center space-x-3">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleViewDetails(washer.id);
-                        }}
-                        className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-200"
-                        title="View Details"
-                      >
-                        <Eye className="h-4 w-4 text-gray-500 hover:text-indigo-600" />
-                      </button>
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${washer.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                         {washer.status === 'Active' ? <CheckCircle className="h-3 w-3 mr-1" /> : <XCircle className="h-3 w-3 mr-1" />}
                         {washer.status}
@@ -316,9 +399,30 @@ const WasherPanel = () => {
                       </button>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{washer.summary?.total || 0}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{washer.summary?.completed || 0}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{washer.summary?.pending || 0}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewDetails(washer.id);
+                        }}
+                        className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-200"
+                        title="View Details"
+                      >
+                        <Eye className="h-4 w-4 text-gray-500 hover:text-indigo-600" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteWasher(washer.id);
+                        }}
+                        className="p-1 hover:bg-gray-100 rounded-full transition-colors duration-200"
+                        title="Delete Washer"
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500 hover:text-red-600" />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -326,37 +430,133 @@ const WasherPanel = () => {
         </div>
       </div>
 
-      {/* Summary */}
-      <div className="bg-white rounded-lg shadow-lg border border-gray-100">
-        <div className="p-4">
-          <h3 className="text-xl font-bold text-gray-900">Performance Overview</h3>
-          <p className="mt-1 text-sm text-gray-500">Summary of all service providers' activities</p>
-          <dl className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <div className="px-4 py-5 bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg rounded-lg overflow-hidden sm:p-6 transform hover:scale-105 transition-all duration-200">
-              <dt className="text-sm font-medium text-white truncate">Total Assigned</dt>
-              <dd className="mt-1 text-3xl font-semibold text-white">
-                {washers.reduce((sum, w) => sum + (w.summary?.total || 0), 0)}
-              </dd>
-            </div>
-            <div className="px-4 py-5 bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg rounded-lg overflow-hidden sm:p-6 transform hover:scale-105 transition-all duration-200">
-              <dt className="text-sm font-medium text-white truncate">Completed</dt>
-              <dd className="mt-1 text-3xl font-semibold text-white">
-                {washers.reduce((sum, w) => sum + (w.summary?.completed || 0), 0)}
-              </dd>
-            </div>
-            <div className="px-4 py-5 bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg rounded-lg overflow-hidden sm:p-6 transform hover:scale-105 transition-all duration-200">
-              <dt className="text-sm font-medium text-white truncate">Pending</dt>
-              <dd className="mt-1 text-3xl font-semibold text-white">
-                {washers.reduce((sum, w) => sum + (w.summary?.pending || 0), 0)}
-              </dd>
-            </div>
-          </dl>
-        </div>
-      </div>
 
+
+
+      {/* Edit Washer Modal */}
+      {showEditModal && editWasher && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Washer</h3>
+            <form onSubmit={handleEditWasher} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editWasher.name}
+                  onChange={(e) => setEditWasher({ ...editWasher, name: e.target.value })}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={editWasher.email}
+                  onChange={(e) => setEditWasher({ ...editWasher, email: e.target.value })}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Phone</label>
+                <input
+                  type="tel"
+                  required
+                  value={editWasher.phone}
+                  onChange={(e) => setEditWasher({ ...editWasher, phone: e.target.value })}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Base Salary (₹)</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={editWasher.salary?.base || ''}
+                  onChange={(e) => setEditWasher({ 
+                    ...editWasher, 
+                    salary: { 
+                      ...editWasher.salary, 
+                      base: parseFloat(e.target.value) || 0 
+                    } 
+                  })}
+                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  placeholder="Enter base salary amount"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setEditWasher(null);
+                  }}
+                  className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Update
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Upload Modal */}
+      {showPhotoModal && selectedWasher && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">
+              Upload Photos for {selectedWasher.name}
+            </h3>
+            <form onSubmit={handlePhotoUpload} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Profile Photo
+                </label>
+                <input
+                  id="photoUpload"
+                  type="file"
+                  accept="image/*"
+                  className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPhotoModal(false);
+                    setSelectedWasher(null);
+                  }}
+                  className="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );
 };
 
 export default WasherPanel;
+
+

@@ -7,7 +7,7 @@ import TypeBadge from '../components/common/TypeBadge';
 import StatusBadge from '../components/common/StatusBadge';
 import { useToast } from '../contexts/ToastContext';
 
-const API_BASE_URL = 'https://zuci-sbackend-6.onrender.com/api';
+const API_BASE_URL = 'https://zuci-sbackend-8.onrender.com/api';
 
 interface WasherDetails {
   id: number;
@@ -327,50 +327,58 @@ const LeadDetails = () => {
             <div className="sm:col-span-1">
               <dt className="text-sm font-medium text-gray-500">Assigned To</dt>
               <dd className="mt-1 text-lg text-gray-900 flex items-center justify-between">
-                {lead.assignedWasher ? (
-                  <>
-                    <span className="text-green-700 font-medium">{lead.assignedWasher.name}</span>
-                    <button
-                      onClick={async () => {
+                {(() => {
+                  // Check if there's a washer assigned in wash history
+                  const assignedWasherFromHistory = washHistory.find(entry => entry.washer?.name)?.washer;
+                  const displayWasher = lead.assignedWasher || assignedWasherFromHistory;
+                  
+                  return displayWasher ? (
+                    <>
+                      <span className="text-green-700 font-medium">{displayWasher.name}</span>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const response = await axios.get(`${API_BASE_URL}/washer/${displayWasher._id}`);
+                            setWasherDetails(response.data);
+                            setShowDetailsModal(true);
+                          } catch (err: any) {
+                            showToast('error', err.message || 'Failed to fetch washer details');
+                          }
+                        }}
+                        className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                      >
+                        <User className="h-4 w-4 mr-1" />
+                        View Details
+                      </button>
+                    </>
+                  ) : (
+                    <select
+                      value=""
+                      onChange={async (e) => {
+                        if (!e.target.value) return;
                         try {
-                          const response = await axios.get(`${API_BASE_URL}/washer/${lead.assignedWasher?._id}`);
-                          setWasherDetails(response.data);
-                          setShowDetailsModal(true);
-                        } catch (err: any) {
-                          showToast('error', err.message || 'Failed to fetch washer details');
+                          const response = await axios.put(`${API_BASE_URL}/leads/${id}`, {
+                            assignedWasher: e.target.value
+                          });
+                          setLead(response.data);
+                          fetchWashHistory();
+                          showToast('success', 'Washer assigned successfully!');
+                        } catch (err) {
+                          showToast('error', 'Failed to assign washer');
                         }
                       }}
-                      className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary"
+                      className="text-sm border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
-                      <User className="h-4 w-4 mr-1" />
-                      View Details
-                    </button>
-                  </>
-                ) : (
-                  <select
-                    onChange={async (e) => {
-                      if (!e.target.value) return;
-                      try {
-                        const response = await axios.put(`${API_BASE_URL}/leads/${id}/assign-washer`, {
-                          washerId: e.target.value
-                        });
-                        setLead(response.data);
-                        showToast('success', 'Washer assigned successfully!');
-                      } catch (err) {
-                        showToast('error', 'Failed to assign washer');
-                      }
-                    }}
-                    className="text-sm border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    defaultValue=""
-                  >
-                    <option value="">Assign Washer</option>
-                    {washers.map((washer) => (
-                      <option key={washer._id} value={washer.id}>
-                        {washer.name} (ID: {washer.id})
-                      </option>
-                    ))}
-                  </select>
-                )}
+                      <option value="">Assign Washer</option>
+                      {washers.map((washer) => (
+                        <option key={washer._id} value={washer._id}>
+                          {washer.name} (ID: {washer.id})
+                        </option>
+                      ))}
+                    </select>
+                  );
+                })()
+                }
               </dd>
             </div>
 
@@ -479,36 +487,15 @@ const LeadDetails = () => {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {entry.washer?.name ? (
-                              <span className="text-green-700 font-medium">{entry.washer.name}</span>
-                            ) : (
-                              <select
-                                onChange={async (e) => {
-                                  if (!e.target.value) return;
-                                  try {
-                                    const response = await axios.put(
-                                      `${API_BASE_URL}/leads/${id}/wash-history/${entry._id}`,
-                                      { washerId: e.target.value }
-                                    );
-                                    setWashHistory(response.data);
-                                    setRefreshKey(prev => prev + 1);
-                                    showToast('success', 'Washer assigned successfully!');
-                                    fetchWashHistory();
-                                  } catch (err) {
-                                    showToast('error', 'Failed to assign washer');
-                                  }
-                                }}
-                                className="text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                defaultValue=""
-                              >
-                                <option value="">Assign Washer</option>
-                                {washers.map((washer) => (
-                                  <option key={washer._id} value={washer.id}>
-                                    {washer.name} (ID: {washer.id})
-                                  </option>
-                                ))}
-                              </select>
-                            )}
+                            {(() => {
+                              // Check if there's a washer assigned in wash history or from lead
+                              const assignedWasher = entry.washer || lead.assignedWasher;
+                              return assignedWasher ? (
+                                <span className="text-green-700 font-medium">{assignedWasher.name}</span>
+                              ) : (
+                                <span className="text-gray-500">Not Assigned</span>
+                              );
+                            })()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                             ₹{entry.amount}
@@ -1693,3 +1680,4 @@ const LeadDetails = () => {
 };
 
 export default LeadDetails;
+

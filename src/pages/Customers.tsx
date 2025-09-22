@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Filter, Search, Phone, Car, MapPin, 
-  User, ArrowUpDown, Edit 
+  User, ArrowUpDown, Edit, Trash2, FileText 
 } from 'lucide-react';
 import TypeBadge from '../components/common/TypeBadge';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Card from '../components/ui/Card';
+import CustomerBill from '../components/CustomerBill';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 
@@ -16,6 +17,8 @@ interface Customer {
   phone: string;
   area: string;
   carModel: string;
+  carNumber?: string;
+  vehicleNumber?: string;
   leadType: string;
   leadSource: string;
   assignedWasher?: { _id: string; name: string };
@@ -42,7 +45,7 @@ interface Customer {
   };
 }
 
-const API_BASE_URL = 'https://zuci-sbackend-2.onrender.com/api';
+const API_BASE_URL = 'https://zuci-sbackend-12.onrender.com/api';
 
 // API functions
 const getAuthHeaders = () => {
@@ -91,6 +94,8 @@ const Customers = () => {
   const [filters, setFilters] = useState({
     leadType: '',
     leadSource: '',
+    location: '',
+    plan: '',
     dateRange: {
       start: '',
       end: ''
@@ -98,6 +103,8 @@ const Customers = () => {
   });
   const [showEditModal, setShowEditModal] = useState(false);
   const [editCustomer, setEditCustomer] = useState<Customer | null>(null);
+  const [showBillModal, setShowBillModal] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
 
   const fetchData = async () => {
     try {
@@ -162,10 +169,56 @@ const Customers = () => {
       );
     }
 
+    // Apply additional filters
+    if (filters.leadType) {
+      filtered = filtered.filter(customer => customer.leadType === filters.leadType);
+    }
+    
+    if (filters.leadSource) {
+      filtered = filtered.filter(customer => customer.leadSource === filters.leadSource);
+    }
+    
+    if (filters.location.trim()) {
+      const locationQuery = filters.location.toLowerCase().trim();
+      filtered = filtered.filter(customer => 
+        customer.area.toLowerCase().includes(locationQuery)
+      );
+    }
+    
+    if (filters.plan.trim()) {
+      const planQuery = filters.plan.toLowerCase().trim();
+      filtered = filtered.filter(customer => {
+        // Check monthly subscription package type
+        if (customer.monthlySubscription?.packageType) {
+          return customer.monthlySubscription.packageType.toLowerCase().includes(planQuery);
+        }
+        // Check wash history for plan types
+        if (customer.washHistory && customer.washHistory.length > 0) {
+          return customer.washHistory.some(wash => 
+            wash.washType.toLowerCase().includes(planQuery)
+          );
+        }
+        return false;
+      });
+    }
+    
+    // Apply date range filter
+    if (filters.dateRange.start || filters.dateRange.end) {
+      filtered = filtered.filter(customer => {
+        const customerDate = new Date(customer.createdAt);
+        const startDate = filters.dateRange.start ? new Date(filters.dateRange.start) : null;
+        const endDate = filters.dateRange.end ? new Date(filters.dateRange.end) : null;
+        
+        if (startDate && customerDate < startDate) return false;
+        if (endDate && customerDate > endDate) return false;
+        return true;
+      });
+    }
+
     setCustomers(filtered);
     setTotalPages(Math.ceil(filtered.length / 10));
     setPage(1); // Reset to first page when filtering
-  }, [debouncedSearchQuery, allCustomers]);
+  }, [debouncedSearchQuery, allCustomers, filters]);
 
   const handleUpdateCustomer = async (id: number, updates: any) => {
     try {
@@ -197,7 +250,7 @@ const Customers = () => {
   // Get paginated customers for display
   const paginatedCustomers = customers.slice((page - 1) * 10, page * 10);
 
-  const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
     const { name, value } = e.target;
     setFilters(prev => ({ ...prev, [name]: value }));
   };
@@ -214,6 +267,8 @@ const Customers = () => {
     setFilters({
       leadType: '',
       leadSource: '',
+      location: '',
+      plan: '',
       dateRange: {
         start: '',
         end: ''
@@ -298,9 +353,9 @@ const Customers = () => {
       </div>
 
       {filterOpen && (
-        <div className="bg-white p-4 rounded-lg shadow mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-lg shadow mb-6 grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Lead Type</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Customer Type</label>
             <select
               name="leadType"
               value={filters.leadType}
@@ -309,7 +364,7 @@ const Customers = () => {
             >
               <option value="">All Types</option>
               <option value="Monthly">Monthly</option>
-              <option value="OneTime">One Time</option>
+              <option value="One-time">One-time</option>
             </select>
           </div>
           <div>
@@ -325,7 +380,31 @@ const Customers = () => {
               <option value="WhatsApp">WhatsApp</option>
               <option value="Walk-in">Walk-in</option>
               <option value="Social Media">Social Media</option>
+              <option value="Website">Website</option>
+              <option value="Pamphlet">Pamphlet</option>
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+            <input
+              type="text"
+              name="location"
+              value={filters.location}
+              onChange={handleFilterChange}
+              placeholder="Filter by area"
+              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-light focus:border-primary-light sm:text-sm rounded-md"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Plan</label>
+            <input
+              type="text"
+              name="plan"
+              value={filters.plan}
+              onChange={handleFilterChange}
+              placeholder="Filter by plan"
+              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-light focus:border-primary-light sm:text-sm rounded-md"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
@@ -489,7 +568,7 @@ const Customers = () => {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <TypeBadge type={customer.status} />
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-4">
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                       <button
                         onClick={() => {
                           setEditCustomer(customer);
@@ -499,6 +578,23 @@ const Customers = () => {
                         title="Edit Customer"
                       >
                         <Edit className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedCustomerId(customer.id);
+                          setShowBillModal(true);
+                        }}
+                        className="text-green-600 hover:text-green-900"
+                        title="Generate Bill"
+                      >
+                        <FileText className="h-4 w-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteCustomer(customer.id)}
+                        className="text-red-600 hover:text-red-900"
+                        title="Delete Customer"
+                      >
+                        <Trash2 className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => navigate(`/user/${customer.id}`)}
@@ -586,6 +682,7 @@ const Customers = () => {
                 phone: editCustomer.phone,
                 area: editCustomer.area,
                 carModel: editCustomer.carModel,
+                carNumber: editCustomer.carNumber,
                 leadType: editCustomer.leadType,
                 leadSource: editCustomer.leadSource,
                 notes: editCustomer.notes
@@ -641,6 +738,19 @@ const Customers = () => {
                     onChange={(e) => setEditCustomer({...editCustomer, carModel: e.target.value})}
                     className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
                     required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Car Number
+                  </label>
+                  <input
+                    type="text"
+                    value={editCustomer.carNumber || editCustomer.vehicleNumber || ''}
+                    onChange={(e) => setEditCustomer({...editCustomer, carNumber: e.target.value})}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
+                    placeholder="Enter car number"
                   />
                 </div>
                 
@@ -711,8 +821,20 @@ const Customers = () => {
           </div>
         </div>
       )}
+
+      {/* Customer Bill Modal */}
+      {showBillModal && selectedCustomerId && (
+        <CustomerBill
+          customerId={selectedCustomerId}
+          onClose={() => {
+            setShowBillModal(false);
+            setSelectedCustomerId(null);
+          }}
+        />
+      )}
     </div>
   );
 };
 
 export default Customers;
+

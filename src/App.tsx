@@ -20,6 +20,8 @@ import Attendance from './pages/Attendance';
 import ScheduleWash from './pages/ScheduleWash';
 import Reports from './pages/Reports';
 import Expenses from './pages/Expenses';
+import SalaryCalculation from './pages/SalaryCalculation';
+import Performance from './pages/Performance';
 import Login from './pages/Login';
 import NotFound from './pages/NotFound';
 
@@ -55,6 +57,8 @@ function App() {
             <Route path="user/:id" element={<LeadDetails />} />
             <Route path="revenue" element={<Revenue />} />
             <Route path="expenses" element={<Expenses />} />
+            <Route path="salary-calculation" element={<SalaryCalculation />} />
+            <Route path="performance" element={<Performance />} />
             <Route path="reports" element={<Reports />} />
           </Route>
           
@@ -75,3 +79,4 @@ function App() {
 }
 
 export default App;
+

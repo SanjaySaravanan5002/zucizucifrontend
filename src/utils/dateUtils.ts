@@ -36,3 +36,4 @@ export const getDateLabel = (date: Date | string): string => {
 export const shouldAutoAssign = (washDate: Date | string): boolean => {
   return isTodayOrTomorrow(washDate);
 };
+

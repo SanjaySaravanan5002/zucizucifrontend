@@ -151,3 +151,4 @@ const OpenStreetMapLocation: React.FC<OpenStreetMapLocationProps> = ({
 };
 
 export default OpenStreetMapLocation;
+

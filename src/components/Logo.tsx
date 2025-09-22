@@ -41,3 +41,4 @@ const Logo = ({ size = 'medium' }: LogoProps) => {
 };
 
 export default Logo;
+

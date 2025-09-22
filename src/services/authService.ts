@@ -1,6 +1,6 @@
 // Authentication service for handling API calls related to authentication
 
-const API_URL = 'https://zuci-sbackend-6.onrender.com/api';
+const API_URL = 'https://zuci-sbackend-8.onrender.com/api';
 
 export interface User {
   id: string;
@@ -75,3 +75,5 @@ export const getCurrentUser = async (): Promise<User> => {
     throw new Error('Failed to get user data');
   }
 };
+
+

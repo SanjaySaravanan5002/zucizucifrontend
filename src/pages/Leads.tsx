@@ -26,7 +26,7 @@ interface Lead {
   notes: string;
 }
 
-const API_BASE_URL = 'https://zuci-sbackend-2.onrender.com/api';
+const API_BASE_URL = 'https://zuci-sbackend-12.onrender.com/api';
 
 // API functions with authentication
 const getAuthHeaders = () => {
@@ -223,6 +223,8 @@ const Leads = () => {
   // Store all leads for client-side filtering
   const [allLeads, setAllLeads] = useState<Lead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [leadsPerPage] = useState(10);
 
   // Fetch leads
   const fetchLeads = useCallback(async () => {
@@ -304,9 +306,17 @@ const Leads = () => {
     fetchWashers();
   }, [fetchWashers]);
 
-  // Update leads state for display
+  // Update leads state for display with pagination
   useEffect(() => {
-    setLeads(filteredLeads);
+    const indexOfLastLead = currentPage * leadsPerPage;
+    const indexOfFirstLead = indexOfLastLead - leadsPerPage;
+    const currentLeads = filteredLeads.slice(indexOfFirstLead, indexOfLastLead);
+    setLeads(currentLeads);
+  }, [filteredLeads, currentPage, leadsPerPage]);
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
   }, [filteredLeads]);
 
   useEffect(() => {
@@ -692,14 +702,14 @@ const Leads = () => {
             </p>
           </div>
           <div className="mt-4 sm:mt-0 flex space-x-3">
-            <button
+            {/* <button
               type="button"
               onClick={() => setShowAddWashEntry(true)}
               className="btn-primary btn-liquid animate-pulse-glow"
             >
               <Plus className="-ml-1 mr-2 h-5 w-5" />
               Add Wash Entry
-            </button>
+            </button> */}
             <button
               type="button"
               onClick={handleAddLeadToggle}
@@ -1228,32 +1238,59 @@ const Leads = () => {
         {/* Pagination */}
         <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
           <div className="flex-1 flex justify-between sm:hidden">
-            <button className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+            <button 
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+            >
               Previous
             </button>
-            <button className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+            <button 
+              onClick={() => setCurrentPage(prev => prev + 1)}
+              disabled={currentPage >= Math.ceil(filteredLeads.length / leadsPerPage)}
+              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+            >
               Next
             </button>
           </div>
           <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
             <div>
               <p className="text-sm text-gray-700">
-                Showing <span className="font-medium">1</span> to <span className="font-medium">{leads.length}</span> of{' '}
-                <span className="font-medium">{leads.length}</span> results
+                Showing <span className="font-medium">{((currentPage - 1) * leadsPerPage) + 1}</span> to{' '}
+                <span className="font-medium">{Math.min(currentPage * leadsPerPage, filteredLeads.length)}</span> of{' '}
+                <span className="font-medium">{filteredLeads.length}</span> results
               </p>
             </div>
             <div>
               <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px" aria-label="Pagination">
-                <button className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                >
                   <span className="sr-only">Previous</span>
                   <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
                   </svg>
                 </button>
-                <button className="relative inline-flex items-center px-4 py-2 border border-gray-300 bg-white text-sm font-medium text-primary-dark">
-                  1
-                </button>
-                <button className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50">
+                {[...Array(Math.ceil(filteredLeads.length / leadsPerPage))].map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i + 1)}
+                    className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                      currentPage === i + 1
+                        ? 'z-10 bg-primary-light border-primary text-white'
+                        : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button 
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(filteredLeads.length / leadsPerPage)))}
+                  disabled={currentPage >= Math.ceil(filteredLeads.length / leadsPerPage)}
+                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                >
                   <span className="sr-only">Next</span>
                   <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                     <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
@@ -1650,3 +1687,4 @@ const Leads = () => {
 };
 
 export default Leads;
+
