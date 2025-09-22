@@ -241,10 +241,12 @@ const Reports: React.FC = () => {
               <select
                 value={filters.reportType || ''}
                 onChange={(e) => {
+                  console.log('Report type changed to:', e.target.value);
                   setFilters(prev => ({ ...prev, reportType: e.target.value }));
-                  // Auto-generate report when switching to monthly for customer reports
-                  if (activeTab === 'customers' && e.target.value === 'monthly') {
-                    setTimeout(() => fetchReport('customers'), 100);
+                  // Auto-generate report when switching to monthly
+                  if (e.target.value === 'monthly') {
+                    console.log('Switching to monthly breakdown, fetching report...');
+                    setTimeout(() => fetchReport(activeTab), 100);
                   }
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
