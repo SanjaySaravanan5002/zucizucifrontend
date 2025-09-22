@@ -152,7 +152,7 @@ const Reports: React.FC = () => {
         generateCustomerExcel(reportData, timestamp);
         break;
       case 'washers':
-        generateWasherExcel(reportData, timestamp);
+        generateWasherExcel(reportData, timestamp, dateRange, filters);
         break;
       case 'transactions':
         generateTransactionExcel(reportData, timestamp);
@@ -1009,7 +1009,7 @@ const generateCustomerExcel = (data: any[], timestamp: string) => {
   }
 };
 
-const generateWasherExcel = (data: any[], timestamp: string) => {
+const generateWasherExcel = (data: any[], timestamp: string, dateRange?: DateRange, filters?: any) => {
   // Check if this is monthly breakdown data
   const hasMonthlyData = data?.some(washer => washer.monthlyWashCount && washer.monthlyWashCount.length > 0);
   
@@ -1045,16 +1045,76 @@ const generateWasherExcel = (data: any[], timestamp: string) => {
     const totalRevenue = data?.reduce((sum, w) => sum + (w.totalRevenue || 0), 0) || 0;
     const topPerformer = data?.reduce((top, w) => (w.totalRevenue || 0) > (top.totalRevenue || 0) ? w : top, data?.[0]) || null;
     
-    // Get all unique months from all washers
+    // Get all unique months from all washers - filtered by date range
     const allMonths = new Set();
     data?.forEach(washer => {
       washer.monthlyWashCount?.forEach((month: any) => {
         if (month._id) {
-          allMonths.add(`${month._id.year}-${month._id.month}`);
+          const monthDate = new Date(month._id.year, month._id.month - 1, 1);
+          let includeMonth = true;
+          
+          if (dateRange?.startDate) {
+            const startDate = new Date(dateRange.startDate);
+            const filterStart = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+            if (monthDate < filterStart) includeMonth = false;
+          }
+          if (dateRange?.endDate && includeMonth) {
+            const endDate = new Date(dateRange.endDate);
+            const filterEnd = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+            if (monthDate > filterEnd) includeMonth = false;
+          }
+          
+          if (includeMonth) {
+            allMonths.add(`${month._id.year}-${month._id.month}`);
+          }
         }
       });
     });
     
+    // Calculate monthly breakdown data for analytics - filter by date range
+    const monthlyBreakdown = new Map();
+    data?.forEach(washer => {
+      washer.monthlyWashCount?.forEach((month: any) => {
+        // Create date for this month to check if it's in range
+        const monthDate = new Date(month._id.year, month._id.month - 1, 1);
+        
+        // Check if month is within date filter range
+        let includeMonth = true;
+        if (dateRange?.startDate) {
+          const startDate = new Date(dateRange.startDate);
+          const filterStart = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+          if (monthDate < filterStart) includeMonth = false;
+        }
+        if (dateRange?.endDate && includeMonth) {
+          const endDate = new Date(dateRange.endDate);
+          const filterEnd = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+          if (monthDate > filterEnd) includeMonth = false;
+        }
+        
+        if (includeMonth) {
+          const monthKey = `${new Date(0, month._id.month - 1).toLocaleString('default', { month: 'short' })} ${month._id.year}`;
+          if (!monthlyBreakdown.has(monthKey)) {
+            monthlyBreakdown.set(monthKey, { washes: 0, revenue: 0, washers: 0 });
+          }
+          const monthData = monthlyBreakdown.get(monthKey);
+          monthData.washes += month.count || 0;
+          monthData.revenue += month.revenue || 0;
+          monthData.washers += 1;
+        }
+      });
+    });
+
+    // Convert monthly data to analytics format
+    const monthlyAnalytics: any[] = [];
+    Array.from(monthlyBreakdown.entries()).forEach(([month, data]: [string, any]) => {
+      monthlyAnalytics.push(
+        { label: `${month} - Total Washes`, value: data.washes },
+        { label: `${month} - Total Revenue`, value: `₹${data.revenue.toLocaleString()}` },
+        { label: `${month} - Active Washers`, value: data.washers },
+        { label: `${month} - Avg Washes/Washer`, value: Math.round(data.washes / data.washers) }
+      );
+    });
+
     const summaryAnalytics = [
       { label: 'Report Period Analysis', value: `${allMonths.size} months tracked` },
       { label: 'Total Active Washers', value: data?.length || 0 },
@@ -1064,7 +1124,8 @@ const generateWasherExcel = (data: any[], timestamp: string) => {
       { label: 'Top Monthly Performer', value: topPerformer?.washerName || 'N/A' },
       { label: 'Best Performer Total Revenue', value: topPerformer?.totalRevenue || 0 },
       { label: 'Average Washes per Washer per Month', value: data?.length && allMonths.size ? Math.round(totalWashes / (data.length * allMonths.size)) : 0 },
-      { label: 'Monthly Revenue Consistency', value: 'View individual sheets for details' }
+      { label: 'Monthly Revenue Consistency', value: 'View individual sheets for details' },
+      ...monthlyAnalytics
     ];
     
     const { ws: summaryWs } = createProfessionalWorkbook(
@@ -1085,19 +1146,36 @@ const generateWasherExcel = (data: any[], timestamp: string) => {
         const washerAvgRevenue = washer.totalWashes ? washer.totalRevenue / washer.totalWashes : 0;
         
         washer.monthlyWashCount.forEach((month: any) => {
+          // Filter months by date range
+          const monthDate = new Date(month._id.year, month._id.month - 1, 1);
+          let includeMonth = true;
+          
+          if (dateRange?.startDate) {
+            const startDate = new Date(dateRange.startDate);
+            const filterStart = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+            if (monthDate < filterStart) includeMonth = false;
+          }
+          if (dateRange?.endDate && includeMonth) {
+            const endDate = new Date(dateRange.endDate);
+            const filterEnd = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+            if (monthDate > filterEnd) includeMonth = false;
+          }
+          
+          if (includeMonth) {
           const monthName = new Date(0, month._id.month - 1).toLocaleString('default', { month: 'long' });
           const monthRevenue = month.revenue || (month.count * washerAvgRevenue); // Estimate if not provided
           const avgPerWash = month.count ? monthRevenue / month.count : 0;
           const performance = washerAvgRevenue > 0 ? Math.round((avgPerWash / washerAvgRevenue) * 100) + '%' : 'N/A';
           
-          monthlyData.push([
-            monthName,
-            month._id.year,
-            month.count,
-            Math.round(monthRevenue),
-            Math.round(avgPerWash),
-            performance
-          ]);
+            monthlyData.push([
+              monthName,
+              month._id.year,
+              month.count,
+              Math.round(monthRevenue),
+              Math.round(avgPerWash),
+              performance
+            ]);
+          }
         });
         
         const washerAnalytics = [
