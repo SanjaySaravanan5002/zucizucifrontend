@@ -106,14 +106,16 @@ const WasherDetails = () => {
       console.log('Fetching salary for washer ID:', id);
       const result = await apiService.get(`/washer/${id}/salary`);
       console.log('Salary API response:', result);
-      if (result.success) {
+      if (result.success && result.data) {
         console.log('Setting current salary:', result.data);
         setCurrentSalary(result.data);
       } else {
-        console.log('Salary API failed:', result.error);
+        console.log('No salary data found or API failed:', result.error);
+        setCurrentSalary(null);
       }
     } catch (err: any) {
       console.error('Failed to load salary:', err);
+      setCurrentSalary(null);
     }
   };
 
@@ -147,10 +149,11 @@ const WasherDetails = () => {
   };
 
   const openSalaryModal = () => {
-    if (currentSalary) {
+    const salaryInfo = currentSalary || washer?.salary;
+    if (salaryInfo) {
       setSalaryData({
-        baseSalary: currentSalary.baseSalary?.toString() || '',
-        effectiveDate: currentSalary.effectiveDate ? new Date(currentSalary.effectiveDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+        baseSalary: salaryInfo.baseSalary?.toString() || '',
+        effectiveDate: salaryInfo.effectiveDate ? new Date(salaryInfo.effectiveDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
       });
     } else {
       setSalaryData({
@@ -216,7 +219,13 @@ const WasherDetails = () => {
         
         if (result.success) {
           console.log('Washer data received:', result.data);
+          console.log('Washer salary from main data:', result.data.salary);
           setWasher(result.data);
+          // Also check if salary is in the main washer object
+          if (result.data.salary) {
+            console.log('Found salary in washer object:', result.data.salary);
+            setCurrentSalary(result.data.salary);
+          }
         } else {
           if (result.status === 403) {
             toast.error('Access denied. Insufficient permissions.');
@@ -527,20 +536,20 @@ const WasherDetails = () => {
                         {currentSalary ? 'Update Salary' : 'Set Salary'}
                       </button>
                     </div>
-                    {currentSalary ? (
+                    {(currentSalary || washer?.salary) ? (
                       <div className="bg-gray-50 rounded-lg p-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                           <div>
                             <span className="font-medium text-gray-700">Base Salary:</span>
                             <p className="text-gray-900 flex items-center mt-1">
                               <IndianRupee className="h-4 w-4 mr-1" />
-                              {currentSalary.baseSalary?.toLocaleString('en-IN') || 'Not set'}
+                              {(currentSalary?.baseSalary || washer?.salary?.baseSalary)?.toLocaleString('en-IN') || 'Not set'}
                             </p>
                           </div>
                           <div>
                             <span className="font-medium text-gray-700">Effective Date:</span>
                             <p className="text-gray-900 mt-1">
-                              {currentSalary.effectiveDate ? new Date(currentSalary.effectiveDate).toLocaleDateString('en-IN') : 'Not set'}
+                              {(currentSalary?.effectiveDate || washer?.salary?.effectiveDate) ? new Date(currentSalary?.effectiveDate || washer?.salary?.effectiveDate).toLocaleDateString('en-IN') : 'Not set'}
                             </p>
                           </div>
                         </div>
