@@ -75,6 +75,12 @@ const WasherDetails = () => {
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const [attendance, setAttendance] = useState<{ attendance: AttendanceRecord[], stats: any } | null>(null);
   const [isMarkingAttendance, setIsMarkingAttendance] = useState(false);
+  const [showSalaryModal, setShowSalaryModal] = useState(false);
+  const [salaryData, setSalaryData] = useState({
+    baseSalary: '',
+    effectiveDate: new Date().toISOString().split('T')[0]
+  });
+  const [currentSalary, setCurrentSalary] = useState<any>(null);
 
   const API_BASE_URL = 'https://zuci-sbackend-12.onrender.com/api';
 
@@ -91,6 +97,68 @@ const WasherDetails = () => {
     } catch (err: any) {
       console.error('Failed to load attendance:', err);
     }
+  };
+
+  const fetchCurrentSalary = async () => {
+    if (!id) return;
+    
+    try {
+      console.log('Fetching salary for washer ID:', id);
+      const result = await apiService.get(`/washer/${id}/salary`);
+      console.log('Salary API response:', result);
+      if (result.success) {
+        console.log('Setting current salary:', result.data);
+        setCurrentSalary(result.data);
+      } else {
+        console.log('Salary API failed:', result.error);
+      }
+    } catch (err: any) {
+      console.error('Failed to load salary:', err);
+    }
+  };
+
+  const handleSalarySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const result = await apiService.post(`/washer/${id}/salary`, {
+        baseSalary: parseFloat(salaryData.baseSalary),
+        effectiveDate: salaryData.effectiveDate
+      });
+      
+      if (result.success) {
+        toast.success('Salary updated successfully');
+        setShowSalaryModal(false);
+        fetchCurrentSalary();
+        setSalaryData({ baseSalary: '', effectiveDate: new Date().toISOString().split('T')[0] });
+      } else {
+        if (result.error?.includes('Cannot POST') || result.error?.includes('Not Found') || result.status === 404) {
+          toast.error('Salary feature is not yet implemented in the backend. Please contact the administrator.');
+        } else {
+          toast.error(result.error || 'Failed to update salary');
+        }
+      }
+    } catch (err: any) {
+      if (err.response?.status === 404 || err.message?.includes('404')) {
+        toast.error('Salary feature is not yet implemented in the backend. Please contact the administrator.');
+      } else {
+        toast.error('Failed to update salary');
+      }
+    }
+  };
+
+  const openSalaryModal = () => {
+    if (currentSalary) {
+      setSalaryData({
+        baseSalary: currentSalary.baseSalary?.toString() || '',
+        effectiveDate: currentSalary.effectiveDate ? new Date(currentSalary.effectiveDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+      });
+    } else {
+      setSalaryData({
+        baseSalary: '',
+        effectiveDate: new Date().toISOString().split('T')[0]
+      });
+    }
+    setShowSalaryModal(true);
   };
 
   const markAttendance = async (type: 'in' | 'out') => {
@@ -140,11 +208,14 @@ const WasherDetails = () => {
           return;
         }
         
+        console.log('Fetching washer details for ID:', id);
         const result = await apiService.get(`/washer/${id}/wash-details`);
+        console.log('Washer details API response:', result);
         
         if (!isMounted) return; // Prevent state update if component unmounted
         
         if (result.success) {
+          console.log('Washer data received:', result.data);
           setWasher(result.data);
         } else {
           if (result.status === 403) {
@@ -171,6 +242,7 @@ const WasherDetails = () => {
     if (id) {
       fetchWasherDetails();
       fetchAttendance();
+      fetchCurrentSalary();
     }
     
     return () => {
@@ -441,6 +513,45 @@ const WasherDetails = () => {
                     />
                   </div>
 
+                  <div className="sm:col-span-2">
+                    <div className="flex items-center justify-between mb-3">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Salary Information
+                      </label>
+                      <button
+                        type="button"
+                        onClick={openSalaryModal}
+                        className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        <IndianRupee className="h-4 w-4 mr-1" />
+                        {currentSalary ? 'Update Salary' : 'Set Salary'}
+                      </button>
+                    </div>
+                    {currentSalary ? (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                          <div>
+                            <span className="font-medium text-gray-700">Base Salary:</span>
+                            <p className="text-gray-900 flex items-center mt-1">
+                              <IndianRupee className="h-4 w-4 mr-1" />
+                              {currentSalary.baseSalary?.toLocaleString('en-IN') || 'Not set'}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-gray-700">Effective Date:</span>
+                            <p className="text-gray-900 mt-1">
+                              {currentSalary.effectiveDate ? new Date(currentSalary.effectiveDate).toLocaleDateString('en-IN') : 'Not set'}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <p className="text-sm text-yellow-800">No salary information set. Click "Set Salary" to configure.</p>
+                      </div>
+                    )}
+                  </div>
+
                   <div>
                     <label htmlFor="profilePhoto" className="block text-sm font-medium text-gray-700 mb-1">
                       Profile Photo
@@ -542,6 +653,42 @@ const WasherDetails = () => {
                         })
                       : <span className="text-gray-400">Not provided</span>}
                   </p>
+                </div>
+
+                <div className="sm:col-span-2">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-medium text-gray-500">Salary Information</h3>
+                    <button
+                      onClick={openSalaryModal}
+                      className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    >
+                      <IndianRupee className="h-4 w-4 mr-1" />
+                      {currentSalary ? 'Update Salary' : 'Set Salary'}
+                    </button>
+                  </div>
+                  {currentSalary ? (
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-700">Base Salary:</span>
+                          <p className="text-gray-900 flex items-center mt-1">
+                            <IndianRupee className="h-4 w-4 mr-1" />
+                            {currentSalary.baseSalary?.toLocaleString('en-IN') || 'Not set'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Effective Date:</span>
+                          <p className="text-gray-900 mt-1">
+                            {currentSalary.effectiveDate ? new Date(currentSalary.effectiveDate).toLocaleDateString('en-IN') : 'Not set'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <p className="text-sm text-yellow-800">No salary information set. Click "Set Salary" to configure.</p>
+                    </div>
+                  )}
                 </div>
 
                 {(washer.aadharImage || washer.drivingLicenseImage) && (
@@ -750,6 +897,77 @@ const WasherDetails = () => {
           </div>
         )}
       </div>
+
+      {/* Salary Modal */}
+      {showSalaryModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Set Salary Information</h3>
+                <button
+                  onClick={() => setShowSalaryModal(false)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              
+              <form onSubmit={handleSalarySubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="baseSalary" className="block text-sm font-medium text-gray-700 mb-1">
+                    Base Salary (Monthly)
+                  </label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="number"
+                      id="baseSalary"
+                      required
+                      min="0"
+                      step="0.01"
+                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      value={salaryData.baseSalary}
+                      onChange={(e) => setSalaryData({ ...salaryData, baseSalary: e.target.value })}
+                      placeholder="Enter base salary"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="effectiveDate" className="block text-sm font-medium text-gray-700 mb-1">
+                    Effective Date
+                  </label>
+                  <input
+                    type="date"
+                    id="effectiveDate"
+                    required
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    value={salaryData.effectiveDate}
+                    onChange={(e) => setSalaryData({ ...salaryData, effectiveDate: e.target.value })}
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowSalaryModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    Save Salary
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
