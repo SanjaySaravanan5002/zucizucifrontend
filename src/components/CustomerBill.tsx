@@ -6,6 +6,8 @@ import { toast } from 'react-hot-toast';
 interface BillItem {
   description: string;
   date: string;
+  time?: string;
+  vehicleNumber?: string;
   amount: number;
   isPaid: boolean;
 }
