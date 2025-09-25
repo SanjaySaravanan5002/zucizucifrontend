@@ -1,6 +1,6 @@
 // Authentication service for handling API calls related to authentication
 
-const API_URL = 'https://zuci-sbackend-8.onrender.com/api';
+const API_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-sbackend-12.onrender.com/api';
 
 export interface User {
   id: string;
