@@ -1,5 +1,6 @@
 // Centralized API service for handling authenticated requests
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://zuci-sbackend-12.onrender.com/api';
+const API_BASE_URL = 'https://zuci-sbackend-12.onrender.com/api';
+console.log('API_BASE_URL:', API_BASE_URL);
 
 interface ApiResponse<T = any> {
   success: boolean;
@@ -146,7 +147,7 @@ class ApiService {
   }
 
   async getRevenueStats(dateParams?: string) {
-    return this.get(`/dashboard/direct-revenue${dateParams || ''}`);
+    return this.get(`/dashboard/revenue-stats${dateParams || ''}`);
   }
 
   async getLeadAcquisition() {
